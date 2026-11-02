@@ -99,15 +99,18 @@ export const useOwnersStore = create<OwnersState>()((set, get) => {
       void useSearchStore.getState().refresh()
     },
 
+    // Search rows list each owner's pet names, so pet changes must refresh them too.
     addPet: async (ownerId, fields) => {
       const pet = await api.addPet(ownerId, fields)
       await reload(ownerId)
+      void useSearchStore.getState().refresh()
       return pet
     },
 
     updatePet: async (ownerId, petId, fields) => {
       await api.updatePet(ownerId, petId, fields)
       await reload(ownerId)
+      void useSearchStore.getState().refresh()
     },
 
     addVisit: async (ownerId, petId, fields) => {

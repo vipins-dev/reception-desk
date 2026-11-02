@@ -19,19 +19,19 @@ verification steps at the bottom.
 | **Client allowed 1–20 phone digits (from OpenAPI); the real entity needs exactly 10 and answers 500 otherwise (Q10)** | a manual `curl` against the running backend returned an unexpected 500 | rule changed to exactly 10 digits; fake backend now reproduces the 500; tests added |
 | Contract test searched a short name prefix, which matches leftovers from earlier runs (passed once on an empty DB) | second run failed | search by the full unique name; run 3× on a dirty DB |
 | Contract config lacked `globals: true`, so the suite could not even start | first real run | fixed |
+| Search rows list pet names (added late), but only owner edits refreshed them: after "Add pet" / renaming a pet the left list was stale | the browser click-through against the real backend (screenshot showed no pet on the row) | pet writes now refresh the search; two tests fail without the fix and pass with it |
 | Proxy 502 (backend down) was shown as a generic "server had a problem" | user's screenshot | 502/503/504 now say the backend is unreachable |
 
 ## Verified vs not verified
 
-- Verified here: `npm run typecheck`, `npm run lint`, `npm test` (88 tests), `npm run build`; the UI was
+- Verified here: `npm run typecheck`, `npm run lint`, `npm test` (89 tests), `npm run build`; the UI was
   exercised in a real browser against a throwaway local mock of the API (three-pane layout, register visit).
 - Verified against the real Spring PetClinic (started by the user, H2 profile): `npm run test:contract`
   (14 tests, repeated runs), the Vite proxy returning 200 from the real API.
-- Click-through in the browser against the real backend: lowercase search, open owner, open pet, register
-  a visit (history, "last visit", toast and focus all behaved).
-- **Not verified:** create owner / add pet / edit flows in the browser against the real backend (covered by the
-  contract tests at the API level and by integration tests against the fake); `docker compose up`;
-  the Railway deployment.
+- Click-through in the browser against the real backend, every flow: lowercase search, "no match → create
+  owner" (with the short-phone rejection first), add pet, edit owner, edit pet, register visit, and a deep link
+  straight to a pet URL. Results were cross-checked with `curl` against the real API.
+- **Not verified:** `docker compose up`; the Railway deployment.
 
 ## Checklist for the human before submitting
 

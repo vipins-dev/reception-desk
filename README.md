@@ -66,7 +66,7 @@ Or everything with Docker (untested): `docker compose up --build` → http://loc
 
 | Command | What |
 |---|---|
-| `npm test` | 88 unit + integration tests (no backend needed; network faked with MSW) |
+| `npm test` | 89 unit + integration tests (no backend needed; network faked with MSW) |
 | `npm run test:contract` | 14 tests: the same API client against a **real** running backend (`PETCLINIC_URL`) |
 | `npm run typecheck` / `npm run lint` / `npm run build` | CI checks |
 

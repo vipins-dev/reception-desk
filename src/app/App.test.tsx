@@ -223,6 +223,8 @@ describe('adding a pet to an existing owner', () => {
     expect(await screen.findByRole('heading', { name: 'Pixel' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Pets (2)' })).toBeInTheDocument()
     expect(db.pets.at(-1)).toMatchObject({ name: 'Pixel', ownerId: 1, typeId: 2, birthDate: '2022-03-04' })
+    // the owner's search row now lists the new pet too
+    expect(await within(screen.getByRole('list', { name: 'Owners' })).findByText('Pets: Leo, Pixel')).toBeInTheDocument()
   })
 
   it('blocks a birth date in the future without calling the API', async () => {
@@ -285,6 +287,18 @@ describe('editing', () => {
     expect(db.pets[0]?.name).toBe('Leonidas')
     // the pet list on the left of the pet pane updates as well
     expect(await petLink(/Leonidas/)).toBeInTheDocument()
+  })
+
+  it('keeps the search rows (which list pet names) in sync when a pet is renamed', async () => {
+    const user = setup('/owners/1/pets/1')
+    const rows = await screen.findByRole('list', { name: 'Owners' })
+    expect(await within(rows).findByText('Pets: Leo')).toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Edit pet' }))
+    const name = screen.getByLabelText('Pet name')
+    await user.clear(name)
+    await user.type(name, 'Leonidas')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(await within(rows).findByText('Pets: Leonidas')).toBeInTheDocument()
   })
 
   it('pre-selects the current type when editing a pet', async () => {
