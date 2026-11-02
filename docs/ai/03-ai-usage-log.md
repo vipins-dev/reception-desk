@@ -31,12 +31,12 @@ verification steps at the bottom.
   a visit (history, "last visit", toast and focus all behaved).
 - **Not verified:** create owner / add pet / edit flows in the browser against the real backend (covered by the
   contract tests at the API level and by integration tests against the fake); `docker compose up`;
-  the Vercel deployment (and the backend host it proxies to).
+  the Railway deployment.
 
 ## Checklist for the human before submitting
 
 1. Start the real backend; `npm run dev`; click through every flow once.
 2. Re-run `npm run test:contract` before submitting (it passed on 2 Nov 2026) and re-read the README "API problems" table.
 3. Read `stores/` and `api/client.ts` until you can explain latest-wins search, the owner cache and error mapping.
-4. Deploy the backend on a Docker host, put its URL in `vercel.json`, deploy on Vercel (README) and open the URL.
+4. Deploy both services on Railway (README) and open the URL.
 5. Prepare for "make a small change": e.g. search by first name client-side, or a visit-description max length.

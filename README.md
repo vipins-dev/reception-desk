@@ -38,7 +38,7 @@ npm install
 npm run dev            # Vite proxies /petclinic/* to localhost:9966 (override: PETCLINIC_URL)
 ```
 
-Optional, everything with Docker (untested): `docker compose up --build` → http://localhost:8080.
+Or everything with Docker (untested): `docker compose up --build` → http://localhost:8080.
 
 | Command | What |
 |---|---|
@@ -48,23 +48,25 @@ Optional, everything with Docker (untested): `docker compose up --build` → htt
 
 The backend uses in-memory H2 seeded on start, so **data resets whenever it restarts**.
 
-### Deploy (Vercel)
+### Deploy (Railway)
 
-Vercel serves the static frontend only. **It cannot run the Java backend** (static sites and short-lived
-serverless functions, no long-running Spring Boot server), so the backend must run on a host that can run a
-Docker image or a JVM — for example Render, Fly.io or Google Cloud Run, using the public image
-`springcommunity/spring-petclinic-rest` (port 9966). It must be reachable over HTTPS.
+Both run on Railway as two services in one project (Railway runs long-lived Docker services, so the Java
+backend is fine there):
 
-1. Start the backend on that host and note its public URL (check `https://<host>/petclinic/actuator/health`).
-2. In `vercel.json`, replace `REPLACE-WITH-YOUR-BACKEND-HOST` with that host and commit. The first rewrite
-   proxies `/petclinic/*` to the backend, so the browser only talks to the Vercel origin (no CORS, no mixed
-   content), exactly like the Vite proxy in development. The second rewrite is the single-page-app fallback.
-3. On vercel.com: **Add New → Project**, import this GitHub repo. The framework (Vite), build command and
-   output directory come from `vercel.json`; no environment variables are needed.
+1. **Backend** — *New → Deploy from Docker Image* → `springcommunity/spring-petclinic-rest`. Name the service
+   `petclinic`. It needs no public domain; the frontend reaches it over Railway's private network on port 9966.
+2. **Frontend** — *New → GitHub Repo* → this repo. `railway.json` makes Railway build the `Dockerfile` (Vite build
+   served by nginx, which proxies `/petclinic/*` to the backend, so the browser stays same-origin and no CORS is
+   involved). Under *Variables* set
+   `BACKEND_URL=http://${{petclinic.RAILWAY_PRIVATE_DOMAIN}}:9966`, then *Settings → Networking → Generate Domain*.
+   The health check is `/healthz`.
+3. Open the generated domain. If the app says "Cannot reach the PetClinic backend", the frontend cannot see the
+   backend: confirm the service is named `petclinic` and shows as running, or temporarily generate a public
+   domain for it and use `BACKEND_URL=https://<that-domain>` (the nginx config handles HTTPS upstreams).
 
-Until step 2 is done the app loads but shows "Cannot reach the PetClinic backend". Demo data lives in the
-backend's memory, so it resets whenever that service restarts or sleeps (free tiers often sleep when idle).
-Not yet deployed or tested on Vercel.
+Demo data lives in the backend's memory, so it resets whenever that service restarts. If the backend crashes at
+startup with an out-of-memory error, check the plan's memory limit or add `JAVA_TOOL_OPTIONS=-Xmx384m`.
+Not yet deployed or tested on Railway; the Dockerfile and nginx config have not been run either.
 
 ## Architecture
 
