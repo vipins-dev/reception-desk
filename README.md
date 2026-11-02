@@ -26,6 +26,30 @@ One persistent screen, three panes, no page-to-page navigation:
 
 ## Run it
 
+### On Railway (frontend + backend)
+
+Railway runs long-lived Docker services, so the Java backend and this frontend live in one project:
+
+| Service | Source | Variables | Public domain |
+|---|---|---|---|
+| `petclinic` (backend) | Docker image `springcommunity/spring-petclinic-rest` | none | none (private network, port 9966) |
+| `web` (frontend) | this GitHub repo, built from the `Dockerfile` (`railway.json`) | `BACKEND_URL=http://${{petclinic.RAILWAY_PRIVATE_DOMAIN}}:9966` | generate one |
+
+1. **Backend:** *New → Deploy from Docker Image* → `springcommunity/spring-petclinic-rest`; name it `petclinic`.
+2. **Frontend:** *New → GitHub Repo* → this repo; add the `BACKEND_URL` variable above; then
+   *Settings → Networking → Generate Domain*. Railway builds the `Dockerfile` (Vite build served by nginx, which
+   proxies `/petclinic/*` to the backend, so the browser stays same-origin and no CORS is involved). The
+   health check is `/healthz`.
+3. Open the generated domain.
+
+If the app says "Cannot reach the PetClinic backend", the frontend cannot see the backend: confirm the service
+is named `petclinic` and is running, or give the backend a public domain and use `BACKEND_URL=https://<domain>`
+(the nginx config handles HTTPS upstreams). If the backend crashes at startup with an out-of-memory error,
+check the plan's memory limit or add `JAVA_TOOL_OPTIONS=-Xmx384m` to it.
+*Not yet deployed or tested on Railway; the Dockerfile and nginx config have not been run either.*
+
+### Locally
+
 Needs Node ≥ 20. The backend needs Java 17+ (or Docker).
 
 ```bash
@@ -46,27 +70,7 @@ Or everything with Docker (untested): `docker compose up --build` → http://loc
 | `npm run test:contract` | 14 tests: the same API client against a **real** running backend (`PETCLINIC_URL`) |
 | `npm run typecheck` / `npm run lint` / `npm run build` | CI checks |
 
-The backend uses in-memory H2 seeded on start, so **data resets whenever it restarts**.
-
-### Deploy (Railway)
-
-Both run on Railway as two services in one project (Railway runs long-lived Docker services, so the Java
-backend is fine there):
-
-1. **Backend** — *New → Deploy from Docker Image* → `springcommunity/spring-petclinic-rest`. Name the service
-   `petclinic`. It needs no public domain; the frontend reaches it over Railway's private network on port 9966.
-2. **Frontend** — *New → GitHub Repo* → this repo. `railway.json` makes Railway build the `Dockerfile` (Vite build
-   served by nginx, which proxies `/petclinic/*` to the backend, so the browser stays same-origin and no CORS is
-   involved). Under *Variables* set
-   `BACKEND_URL=http://${{petclinic.RAILWAY_PRIVATE_DOMAIN}}:9966`, then *Settings → Networking → Generate Domain*.
-   The health check is `/healthz`.
-3. Open the generated domain. If the app says "Cannot reach the PetClinic backend", the frontend cannot see the
-   backend: confirm the service is named `petclinic` and shows as running, or temporarily generate a public
-   domain for it and use `BACKEND_URL=https://<that-domain>` (the nginx config handles HTTPS upstreams).
-
-Demo data lives in the backend's memory, so it resets whenever that service restarts. If the backend crashes at
-startup with an out-of-memory error, check the plan's memory limit or add `JAVA_TOOL_OPTIONS=-Xmx384m`.
-Not yet deployed or tested on Railway; the Dockerfile and nginx config have not been run either.
+The backend uses in-memory H2 seeded on start, so **data resets whenever it restarts** (locally and on Railway).
 
 ## Architecture
 
