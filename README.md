@@ -50,7 +50,7 @@ check the plan's memory limit or add `JAVA_TOOL_OPTIONS=-Xmx384m` to it.
 
 ### Locally
 
-Needs Node ≥ 20. The backend needs Java 17+ (or Docker).
+Needs Node 22.22+ (or 24; the test tooling requires it — check with `node -v`). The backend needs Java 17+ (or Docker).
 
 ```bash
 # 1. backend (separate terminal) — http://localhost:9966/petclinic
