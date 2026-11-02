@@ -1,7 +1,8 @@
 # Working plan and decisions (written before coding, kept up to date)
 
 Tool: Claude Code (agent) driven from a desktop session. Inputs given to it: the assignment text and the
-instruction "Zustand for state, Railway to deploy, GitHub for the repo; find a good architecture". No
+instruction "Zustand for state, a hosted deploy, GitHub for the repo; find a good architecture" (the
+deploy target was later switched from Railway to Vercel). No
 secrets, personal data or employer material were provided.
 
 ## Requirement → design
@@ -28,8 +29,10 @@ secrets, personal data or employer material were provided.
 6. **`/v2/owners`** instead of v1 list (v1 answers 404 on no match).
 7. **Tests**: integration tests drive the real UI + stores + HTTP client against an in-memory fake of the
    backend (MSW); a separate contract suite checks assumptions on the real backend.
-8. **Deploy**: Dockerfile + nginx that proxies `/petclinic/*` (same origin, no CORS); backend as a second
-   Railway service from the public Docker image.
+8. **Deploy**: Vercel for the static frontend, with a `vercel.json` rewrite that proxies `/petclinic/*` to the
+   backend (same origin, no CORS, no mixed content). Vercel cannot run the JVM, so the backend runs on a
+   Docker-capable host. A Dockerfile + nginx + compose file remain only for an optional local run.
+   (First proposal was Railway for both; changed at the user's request.)
 
 ## Follow-up requests during the work
 

@@ -2,7 +2,7 @@ server {
     listen ${PORT};
     root /usr/share/nginx/html;
 
-    # Railway health check
+    # Health check
     location = /healthz {
         access_log off;
         return 200 'ok';

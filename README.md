@@ -38,7 +38,7 @@ npm install
 npm run dev            # Vite proxies /petclinic/* to localhost:9966 (override: PETCLINIC_URL)
 ```
 
-Or everything with Docker: `docker compose up --build` → http://localhost:8080.
+Optional, everything with Docker (untested): `docker compose up --build` → http://localhost:8080.
 
 | Command | What |
 |---|---|
@@ -48,12 +48,23 @@ Or everything with Docker: `docker compose up --build` → http://localhost:8080
 
 The backend uses in-memory H2 seeded on start, so **data resets whenever it restarts**.
 
-### Deploy (Railway)
+### Deploy (Vercel)
 
-Two services in one project: (1) the backend from Docker image `springcommunity/spring-petclinic-rest`
-(no public domain needed); (2) this repo (`railway.json` → `Dockerfile`: Vite build served by nginx, which
-proxies `/petclinic/*` to the backend, so the browser stays same-origin and no CORS is involved).
-Set on the web service: `BACKEND_URL=http://<backend-private-domain>:9966`. Health check: `/healthz`.
+Vercel serves the static frontend only. **It cannot run the Java backend** (static sites and short-lived
+serverless functions, no long-running Spring Boot server), so the backend must run on a host that can run a
+Docker image or a JVM — for example Render, Fly.io or Google Cloud Run, using the public image
+`springcommunity/spring-petclinic-rest` (port 9966). It must be reachable over HTTPS.
+
+1. Start the backend on that host and note its public URL (check `https://<host>/petclinic/actuator/health`).
+2. In `vercel.json`, replace `REPLACE-WITH-YOUR-BACKEND-HOST` with that host and commit. The first rewrite
+   proxies `/petclinic/*` to the backend, so the browser only talks to the Vercel origin (no CORS, no mixed
+   content), exactly like the Vite proxy in development. The second rewrite is the single-page-app fallback.
+3. On vercel.com: **Add New → Project**, import this GitHub repo. The framework (Vite), build command and
+   output directory come from `vercel.json`; no environment variables are needed.
+
+Until step 2 is done the app loads but shows "Cannot reach the PetClinic backend". Demo data lives in the
+backend's memory, so it resets whenever that service restarts or sleeps (free tiers often sleep when idle).
+Not yet deployed or tested on Vercel.
 
 ## Architecture
 
