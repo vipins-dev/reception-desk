@@ -12,21 +12,20 @@ import type {
   Pet,
   VisitFields,
 } from '@/api/types'
-import { useSearchStore } from './searchStore'
 
 /**
- * Owner aggregate cache.
+ * Owner aggregate cache: the single place owners, pets and visits live.
  *
- * `GET /owners/{id}` returns the owner *with* pets and every visit, so one
- * request gives the receptionist the whole picture. Pets and visits are
- * therefore not cached separately: they are read out of the owner (see
- * `selectPet`), which means there is exactly one copy of each fact and nothing
- * to keep in sync.
+ * `GET /owners/{id}` returns the owner *with* pets and every visit, and so
+ * does each row of `GET /v2/owners`. Pets and visits are therefore not cached
+ * separately: they are read out of the owner (see `findPet`), which means there
+ * is exactly one copy of each fact and nothing to keep in sync. The owner list,
+ * the search results and the visits of the day are all *derived* from these
+ * records (see `directoryStore`), so a write shows up everywhere at once.
  *
  * Writes are pessimistic: send, then re-read the owner. Two of the three PUTs
- * answer 204 with no body, and the create-pet response is not a trustworthy
- * source of truth (see README "API problems"), so the re-read is both the simplest
- * and the safest way to show what the server actually stored.
+ * answer 204 with no body, so the re-read is both the simplest and the safest
+ * way to show what the server actually stored.
  */
 
 export interface OwnerRecord {
@@ -34,6 +33,11 @@ export interface OwnerRecord {
   status: 'loading' | 'ready' | 'error'
   owner: Owner | null
   error: ApiError | null
+  /**
+   * When the request that produced `owner` was sent (ms). A slow list response
+   * must not overwrite an owner that was re-read after the list was requested.
+   */
+  requestedAt: number
 }
 
 interface OwnersState {
@@ -41,6 +45,8 @@ interface OwnersState {
 
   /** Fetch (or re-fetch) an owner. Cached data stays visible while refreshing. */
   load: (id: OwnerId) => Promise<void>
+  /** Store owners fetched in bulk (the directory), unless a newer read is already there. */
+  ingest: (owners: readonly Owner[], requestedAt: number) => void
 
   create: (fields: OwnerFields) => Promise<Owner>
   update: (id: OwnerId, fields: OwnerFields) => Promise<void>
@@ -57,7 +63,7 @@ export const useOwnersStore = create<OwnersState>()((set, get) => {
 
   const patch = (id: number, next: Partial<OwnerRecord>) =>
     set((s) => {
-      const prev = s.records[id] ?? { status: 'loading', owner: null, error: null }
+      const prev = s.records[id] ?? { status: 'loading', owner: null, error: null, requestedAt: 0 }
       return { records: { ...s.records, [id]: { ...prev, ...next } } }
     })
 
@@ -71,11 +77,12 @@ export const useOwnersStore = create<OwnersState>()((set, get) => {
       inflight.get(id)?.abort()
       const controller = new AbortController()
       inflight.set(id, controller)
+      const requestedAt = Date.now()
       patch(id, { status: get().records[id]?.owner ? 'ready' : 'loading', error: null })
       try {
         const owner = await api.getOwner(id, controller.signal)
         if (controller.signal.aborted) return
-        patch(id, { status: 'ready', owner, error: null })
+        patch(id, { status: 'ready', owner, error: null, requestedAt })
       } catch (e) {
         if (isAbortError(e) || controller.signal.aborted) return
         patch(id, { status: 'error', error: toApiError(e) })
@@ -84,33 +91,40 @@ export const useOwnersStore = create<OwnersState>()((set, get) => {
       }
     },
 
+    ingest: (owners, requestedAt) =>
+      set((s) => {
+        const records = { ...s.records }
+        for (const owner of owners) {
+          const prev = records[owner.id]
+          if (prev?.owner && prev.requestedAt > requestedAt) continue
+          records[owner.id] = { status: 'ready', owner, error: null, requestedAt }
+        }
+        return { records }
+      }),
+
     create: async (fields) => {
+      const requestedAt = Date.now()
       const owner = await api.createOwner(fields)
       set((s) => ({
-        records: { ...s.records, [owner.id]: { status: 'ready', owner, error: null } },
+        records: { ...s.records, [owner.id]: { status: 'ready', owner, error: null, requestedAt } },
       }))
-      void useSearchStore.getState().refresh()
       return owner
     },
 
     update: async (id, fields) => {
       await api.updateOwner(id, fields)
       await reload(id)
-      void useSearchStore.getState().refresh()
     },
 
-    // Search rows list each owner's pet names, so pet changes must refresh them too.
     addPet: async (ownerId, fields) => {
       const pet = await api.addPet(ownerId, fields)
       await reload(ownerId)
-      void useSearchStore.getState().refresh()
       return pet
     },
 
     updatePet: async (ownerId, petId, fields) => {
       await api.updatePet(ownerId, petId, fields)
       await reload(ownerId)
-      void useSearchStore.getState().refresh()
     },
 
     addVisit: async (ownerId, petId, fields) => {

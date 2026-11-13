@@ -2,70 +2,108 @@ import { delay, http, HttpResponse } from 'msw'
 import { asOwnerId, asPetId } from '@/api/types'
 import { BASE, db } from '@/test/fakeBackend'
 import { server } from '@/test/server'
+import { DIRECTORY_MAX_PAGES, useDirectoryStore } from './directoryStore'
 import { useOwnersStore } from './ownerStore'
 import { usePetTypeStore } from './petTypeStore'
 import { useSearchStore } from './searchStore'
 
+const cachedLastNames = () =>
+  Object.values(useOwnersStore.getState().records).map((r) => r.owner?.lastName)
+
+const page = (content: unknown[], pageNo: number, totalPages: number, size = 100) => ({
+  content,
+  page: pageNo,
+  size,
+  totalElements: content.length * totalPages,
+  totalPages,
+})
+
 describe('searchStore', () => {
-  it('browses all owners for an empty query', async () => {
-    await useSearchStore.getState().run()
-    const s = useSearchStore.getState()
-    expect(s.result.status).toBe('ready')
-    expect(s.owners.map((o) => o.lastName)).toEqual(['Franklin', 'Davis', 'Davis', 'Coleman'])
-    expect(s.totalElements).toBe(4)
-  })
-
-  it('searches by last-name prefix and tolerates lowercase input', async () => {
+  it('holds the query and the species chip, nothing else', () => {
     useSearchStore.getState().setQuery('dav')
-    await useSearchStore.getState().run()
-    expect(useSearchStore.getState().owners.map((o) => o.firstName)).toEqual(['Betty', 'Harold'])
+    useSearchStore.getState().setSpecies('dogs')
+    expect(useSearchStore.getState()).toMatchObject({ query: 'dav', species: 'dogs' })
+  })
+})
+
+describe('directoryStore', () => {
+  it('loads every owner into the owner cache and becomes ready', async () => {
+    await useDirectoryStore.getState().load()
+    expect(useDirectoryStore.getState()).toMatchObject({ status: 'ready', error: null, truncated: false })
+    expect(cachedLastNames()).toEqual(['Franklin', 'Davis', 'Davis', 'Coleman'])
+    expect(useOwnersStore.getState().records[6]?.owner?.pets.map((p) => p.name)).toEqual(['Samantha', 'Max'])
   })
 
-  it('treats "no match" as an empty ready state, not an error', async () => {
-    useSearchStore.getState().setQuery('Zzz')
-    await useSearchStore.getState().run()
-    expect(useSearchStore.getState()).toMatchObject({ result: { status: 'ready' }, owners: [], totalElements: 0 })
-  })
-
-  it('lets only the newest request win when responses arrive out of order', async () => {
+  it('follows every page of the list', async () => {
+    const seen: string[] = []
     server.use(
-      http.get(`${BASE}/v2/owners`, async ({ request }) => {
-        const q = new URL(request.url).searchParams.get('lastName')
-        if (q === 'D') await delay(80) // the slow, stale response
-        const owners = q === 'D' ? db.owners : db.owners.filter((o) => o.lastName.startsWith(q ?? ''))
-        return HttpResponse.json({
-          content: owners.map((o) => ({ ...o, pets: [] })),
-          page: 0,
-          size: 10,
-          totalElements: owners.length,
-          totalPages: 1,
-        })
+      http.get(`${BASE}/v2/owners`, ({ request }) => {
+        const n = Number(new URL(request.url).searchParams.get('page'))
+        seen.push(`page ${n}`)
+        const half = db.owners.slice(n * 2, n * 2 + 2).map((o) => ({ ...o, pets: [] }))
+        return HttpResponse.json(page(half, n, 2, 2))
       }),
     )
-    const store = useSearchStore.getState()
-    store.setQuery('D')
-    const slow = store.run()
-    store.setQuery('Franklin')
-    const fast = store.run()
-    await Promise.all([slow, fast])
-    expect(useSearchStore.getState().owners.map((o) => o.lastName)).toEqual(['Franklin'])
-    expect(useSearchStore.getState().resultsFor).toBe('Franklin')
+    await useDirectoryStore.getState().load()
+    expect(seen).toEqual(['page 0', 'page 1'])
+    expect(cachedLastNames()).toHaveLength(4)
   })
 
-  it('keeps showing the previous results when a search fails, and records the error', async () => {
-    await useSearchStore.getState().run()
-    server.use(http.get(`${BASE}/v2/owners`, () => new HttpResponse(null, { status: 500 })))
-    await useSearchStore.getState().run()
-    const s = useSearchStore.getState()
-    expect(s.result.status).toBe('error')
-    expect(s.owners).toHaveLength(4)
-  })
-
-  it('refresh() does nothing until a search has been made', async () => {
+  it('stops at the safety cap and says the list is partial', async () => {
     let calls = 0
-    server.use(http.get(`${BASE}/v2/owners`, () => (calls++, HttpResponse.json({ content: [], page: 0, size: 10, totalElements: 0, totalPages: 0 }))))
-    await useSearchStore.getState().refresh()
-    expect(calls).toBe(0)
+    server.use(
+      http.get(`${BASE}/v2/owners`, () => {
+        calls++
+        return HttpResponse.json(page([{ ...db.owners[0]!, pets: [] }], calls - 1, DIRECTORY_MAX_PAGES + 5))
+      }),
+    )
+    await useDirectoryStore.getState().load()
+    expect(calls).toBe(DIRECTORY_MAX_PAGES)
+    expect(useDirectoryStore.getState().truncated).toBe(true)
+  })
+
+  it('records an error, and a retry recovers', async () => {
+    server.use(http.get(`${BASE}/v2/owners`, () => new HttpResponse(null, { status: 500 }), { once: true }))
+    await useDirectoryStore.getState().load()
+    expect(useDirectoryStore.getState().status).toBe('error')
+    await useDirectoryStore.getState().load()
+    expect(useDirectoryStore.getState().status).toBe('ready')
+  })
+
+  it('a silent refresh keeps the list on screen, picks up new owners, and ignores failures', async () => {
+    await useDirectoryStore.getState().load()
+    db.owners.push({ id: 50, firstName: 'New', lastName: 'Arrival', address: 'a', city: 'c', telephone: '6085550150' })
+    await useDirectoryStore.getState().load({ silent: true })
+    expect(cachedLastNames()).toContain('Arrival')
+
+    server.use(http.get(`${BASE}/v2/owners`, () => HttpResponse.error()))
+    const loading = useDirectoryStore.getState().load({ silent: true })
+    expect(useDirectoryStore.getState().status).toBe('ready') // never flips to "loading"
+    await loading
+    expect(useDirectoryStore.getState()).toMatchObject({ status: 'ready', error: null })
+    expect(cachedLastNames()).toHaveLength(5)
+  })
+
+  it('does not let a slow list overwrite an owner that was re-read after the list was requested', async () => {
+    server.use(
+      http.get(`${BASE}/v2/owners`, async () => {
+        const stale = db.owners.map((o) => ({ ...o, pets: [] })) // snapshot taken when the request arrives
+        await delay(80)
+        return HttpResponse.json(page(stale, 0, 1))
+      }),
+    )
+    const slowList = useDirectoryStore.getState().load()
+    await new Promise((r) => setTimeout(r, 10)) // the list request is now in flight
+    await useOwnersStore.getState().update(asOwnerId(6), {
+      firstName: 'Jeanne',
+      lastName: 'Coleman',
+      address: '105 N. Lake St.',
+      city: 'Monona',
+      telephone: '6085552654',
+    })
+    await slowList
+    expect(useOwnersStore.getState().records[6]?.owner?.firstName).toBe('Jeanne')
+    expect(useOwnersStore.getState().records[1]?.owner?.firstName).toBe('George') // the others did arrive
   })
 })
 
@@ -120,12 +158,9 @@ describe('ownersStore', () => {
     expect(db.visits.some((v) => v.description === 'x')).toBe(true)
   })
 
-  it('refreshes the search list after creating an owner', async () => {
-    useSearchStore.getState().setQuery('Newman')
-    await useSearchStore.getState().run()
-    expect(useSearchStore.getState().totalElements).toBe(0)
-    await useOwnersStore.getState().create({ firstName: 'Ned', lastName: 'Newman', address: 'a', city: 'c', telephone: '6085550199' })
-    await vi.waitFor(() => expect(useSearchStore.getState().totalElements).toBe(1))
+  it('puts a newly created owner straight into the cache, where every list is derived from', async () => {
+    const owner = await useOwnersStore.getState().create({ firstName: 'Ned', lastName: 'Newman', address: 'a', city: 'c', telephone: '6085550199' })
+    expect(useOwnersStore.getState().records[owner.id]).toMatchObject({ status: 'ready', owner: { lastName: 'Newman' } })
   })
 })
 

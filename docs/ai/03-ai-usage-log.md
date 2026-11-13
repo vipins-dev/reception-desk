@@ -21,6 +21,11 @@ verification steps at the bottom.
 | Contract config lacked `globals: true`, so the suite could not even start | first real run | fixed |
 | Search rows list pet names (added late), but only owner edits refreshed them: after "Add pet" / renaming a pet the left list was stale | the browser click-through against the real backend (screenshot showed no pet on the row) | pet writes now refresh the search; two tests fail without the fix and pass with it |
 | Proxy 502 (backend down) was shown as a generic "server had a problem" | user's screenshot | 502/503/504 now say the backend is unreachable |
+| UI redesign: a helper named `useTemplate` (a click handler) tripped the rules-of-hooks lint | `npm run lint` | renamed `applyTemplate` |
+| UI redesign: a test kept a reference to the lookup `<ul>`, which unmounts while nobody matches, so it asserted on a detached copy | one failing test ("found 4 links, expected 1") | tests re-query the list every time |
+| UI redesign: typing a phone number showed "No owner matches “5”" for the first keystrokes | thinking through the failing test above, then a regression test | one or two digits no longer narrow the search |
+| UI redesign: on a phone the header pushed "New Owner" off screen; on a tablet the 70-owner list pushed the owner pane far below the fold | looking at the app at 390 px and 820 px wide | compact header (icon-only button), list height capped when stacked |
+| UI redesign: a screenshot showed the drawer half off screen | taking it from a background tab, where browsers freeze CSS animations | not a bug; checked again with the tab in front |
 
 ## Verified vs not verified
 
@@ -34,6 +39,10 @@ verification steps at the bottom.
 - Live demo on Render (free tier), driven through the owner's signed-in browser: search, owner, pet, register
   visit and a deep link worked; `GET`/`POST`/`PUT` through the rewrite were checked with `curl`. The first load
   after idle showed the 15 s timeout error (the free backend was asleep); Retry worked.
+- UI redesign (13 Nov 2026): typecheck, lint, 144 unit/integration tests (three runs in a row), build, and the 14
+  contract tests against the real local backend all pass. Looked at in a real browser at 1440, 820 and 390 px wide
+  against the real backend (Front Desk, New Owner drawer, All Owners, Today's Visits). **Not yet re-checked on the
+  live Render demo.** Drawer animation, `/` shortcut and responsive layout have no automated test.
 - **Not verified:** `docker compose up`, the `Dockerfile` and the nginx config (there was no Docker on the
   development machine); they are not used by the Render deployment.
 - Live demo, second pass (13 Nov 2026): create owner (formatted phone stored as 10 digits), add pet (landed on
@@ -43,6 +52,8 @@ verification steps at the bottom.
 ## Checklist for the human before submitting
 
 1. Start the real backend; `npm run dev`; click through every flow once.
-2. Re-run `npm run test:contract` before submitting (it passed on 2 Nov 2026) and re-read the README "API problems" table.
-3. Read `stores/` and `api/client.ts` until you can explain latest-wins search, the owner cache and error mapping.
-4. Prepare for "make a small change": e.g. search by first name client-side, or a visit-description max length.
+2. Re-run `npm run test:contract` before submitting (it passed on 13 Nov 2026) and re-read the README "API problems" table.
+3. Read `stores/` and `api/client.ts` until you can explain the owner cache, how the lists are derived from it,
+   and error mapping. Read `domain/search.ts` for the client-side search.
+4. Prepare for "make a small change": e.g. a new quick-fill note in `VisitForm.tsx`, a new filter chip in
+   `domain/search.ts`, or a visit-description max length.

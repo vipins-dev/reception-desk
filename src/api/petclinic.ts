@@ -41,6 +41,14 @@ export const searchOwners = (params: SearchOwnersParams, signal?: AbortSignal): 
     signal,
   })
 
+/**
+ * One page of *all* owners (an empty last name matches everyone). The desk
+ * loads the whole list this way and searches it locally, because the API can
+ * only search by last name.
+ */
+export const listOwners = (page: number, size: number, signal?: AbortSignal): Promise<OwnerPage> =>
+  searchOwners({ lastName: '', page, size }, signal)
+
 export const getOwner = (id: OwnerId, signal?: AbortSignal): Promise<Owner> =>
   request(`/owners/${id}`, { schema: OwnerSchema, signal })
 

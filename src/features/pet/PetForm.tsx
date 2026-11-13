@@ -5,6 +5,7 @@ import type { PetFields, PetType } from '@/api/types'
 import { Alert, Button, LoadingBlock, SelectField, TextField } from '@/components/ui'
 import { applyApiError } from '@/components/serverErrors'
 import { todayIso, yearsAgoIso } from '@/domain/dates'
+import { titleCase } from '@/domain/format'
 import { petFormSchema, toPetFields, type PetFormValues } from '@/domain/validation'
 import { usePetTypeStore } from '@/stores/petTypeStore'
 
@@ -89,6 +90,14 @@ function PetFormFields({ mode, initial, onSubmit, onCancel, types }: Props & { t
         {...register('name')}
       />
       <div className="grid grid-cols-2 gap-3">
+        <SelectField label="Species" error={errors.typeId?.message} {...register('typeId')}>
+          <option value="">Select…</option>
+          {types.map((t) => (
+            <option key={t.id} value={String(t.id)}>
+              {titleCase(t.name)}
+            </option>
+          ))}
+        </SelectField>
         <TextField
           label="Birth date"
           type="date"
@@ -97,21 +106,13 @@ function PetFormFields({ mode, initial, onSubmit, onCancel, types }: Props & { t
           error={errors.birthDate?.message}
           {...register('birthDate')}
         />
-        <SelectField label="Type" error={errors.typeId?.message} {...register('typeId')}>
-          <option value="">Select…</option>
-          {types.map((t) => (
-            <option key={t.id} value={String(t.id)}>
-              {t.name}
-            </option>
-          ))}
-        </SelectField>
       </div>
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
         <Button type="submit" loading={isSubmitting}>
-          {mode === 'create' ? 'Add pet' : 'Save changes'}
+          {mode === 'create' ? 'Save Pet' : 'Save Changes'}
         </Button>
       </div>
     </form>

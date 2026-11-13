@@ -63,9 +63,35 @@ export const petFormSchema = z.object({
     // Backend rule (PetAgeValidator): not in the future, not older than 50 years.
     .refine((v) => !isValidIsoDate(v) || v <= todayIso(), 'Birth date cannot be in the future')
     .refine((v) => !isValidIsoDate(v) || v >= yearsAgoIso(50), 'Birth date cannot be older than 50 years'),
-  typeId: z.string().min(1, 'Choose a pet type'),
+  typeId: z.string().min(1, 'Choose a species'),
 })
 export type PetFormValues = z.infer<typeof petFormSchema>
+
+/**
+ * New Owner drawer: the owner fields plus an optional first pet, validated in
+ * one pass. The pet fields only count when "Also register their pet now" is on;
+ * they reuse `petFormSchema` so the rules cannot drift apart.
+ */
+export const newOwnerFormSchema = ownerFormSchema
+  .extend({
+    withPet: z.boolean(),
+    petName: z.string(),
+    petBirthDate: z.string(),
+    petTypeId: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.withPet) return
+    const pet = petFormSchema.safeParse({ name: v.petName, birthDate: v.petBirthDate, typeId: v.petTypeId })
+    if (pet.success) return
+    const target = { name: 'petName', birthDate: 'petBirthDate', typeId: 'petTypeId' } as const
+    for (const issue of pet.error.issues) {
+      const key = issue.path[0]
+      if (key === 'name' || key === 'birthDate' || key === 'typeId') {
+        ctx.addIssue({ code: 'custom', path: [target[key]], message: issue.message })
+      }
+    }
+  })
+export type NewOwnerFormValues = z.infer<typeof newOwnerFormSchema>
 
 export const visitFormSchema = z.object({
   date: z.string().min(1, 'Visit date is required').refine(isValidIsoDate, 'Enter a valid date'),
@@ -93,14 +119,3 @@ export const toVisitFields = (v: VisitFormValues): VisitFields => ({
   date: v.date,
   description: v.description.trim(),
 })
-
-/**
- * Owner search sends the typed text as a prefix of the last name. The backend
- * LIKE is case-sensitive (stored names are capitalised), so we capitalise the
- * first letter to make "davis" find "Davis". Names like "McTavish" typed in
- * lowercase still need exact casing — recorded as a known limitation.
- */
-export function normalizeLastNameQuery(raw: string): string {
-  const q = raw.trim()
-  return q.charAt(0).toLocaleUpperCase() + q.slice(1)
-}

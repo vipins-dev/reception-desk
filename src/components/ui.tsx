@@ -3,27 +3,35 @@ import { useId, type ComponentProps, type ReactNode } from 'react'
 /** Small, dependency-free primitives. Styling lives here so features stay readable. */
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost'
+type ButtonSize = 'md' | 'sm'
 
 const buttonStyles: Record<ButtonVariant, string> = {
   primary: 'bg-brand-700 text-white hover:bg-brand-800 disabled:bg-brand-700/50',
-  secondary: 'bg-white text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50 disabled:text-slate-400',
+  secondary: 'bg-white text-slate-800 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 disabled:text-slate-400',
   ghost: 'text-brand-700 hover:bg-brand-50 disabled:text-slate-400',
+}
+
+// 40px touch targets; single-line labels that never shrink or wrap.
+const buttonSizes: Record<ButtonSize, string> = {
+  md: 'h-10 px-4 py-2',
+  sm: 'h-9 px-3 py-1.5',
 }
 
 export function Button({
   variant = 'primary',
+  size = 'md',
   loading = false,
   className = '',
   children,
   disabled,
   ...props
-}: ComponentProps<'button'> & { variant?: ButtonVariant; loading?: boolean }) {
+}: ComponentProps<'button'> & { variant?: ButtonVariant; size?: ButtonSize; loading?: boolean }) {
   return (
     <button
       type="button"
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed ${buttonStyles[variant]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed ${buttonSizes[size]} ${buttonStyles[variant]} ${className}`}
       {...props}
     >
       {loading && <Spinner className="h-4 w-4" />}
@@ -47,8 +55,8 @@ interface FieldChrome {
   hint?: string | undefined
 }
 
-const inputClass =
-  'block w-full rounded-md border-0 bg-white px-3 py-1.5 text-sm text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-600 aria-[invalid=true]:ring-red-500'
+export const inputClass =
+  'block h-10 w-full rounded-lg border-0 bg-white px-3 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-700 aria-[invalid=true]:ring-red-500'
 
 function Field({
   label,
@@ -60,12 +68,12 @@ function Field({
 }: FieldChrome & { htmlFor: string; describedBy: string; children: ReactNode }) {
   return (
     <div>
-      <label htmlFor={htmlFor} className="mb-1 block text-sm font-medium text-slate-700">
+      <label htmlFor={htmlFor} className="mb-1 block text-[13px] font-medium text-slate-600">
         {label}
       </label>
       {children}
       {error ? (
-        <p id={describedBy} className="mt-1 text-xs text-red-700">
+        <p id={describedBy} className="mt-1 text-xs text-red-600">
           {error}
         </p>
       ) : hint ? (
@@ -130,37 +138,29 @@ export function Alert({
   action?: ReactNode
 }) {
   const palette =
-    tone === 'error' ? 'bg-red-50 text-red-800 ring-red-200' : 'bg-amber-50 text-amber-900 ring-amber-200'
+    tone === 'error' ? 'bg-red-50 text-red-700 ring-red-200' : 'bg-amber-50 text-amber-900 ring-amber-200'
   return (
-    <div role="alert" className={`flex items-start justify-between gap-3 rounded-md p-3 text-sm ring-1 ${palette}`}>
+    <div role="alert" className={`flex items-start justify-between gap-3 rounded-lg p-3 text-sm ring-1 ${palette}`}>
       <div>{children}</div>
       {action}
     </div>
   )
 }
 
-export function Card({
-  title,
-  actions,
-  children,
-  className = '',
-}: {
-  title?: ReactNode
-  actions?: ReactNode
-  children: ReactNode
-  className?: string
-}) {
+/**
+ * One flat level of elevation: a bordered white panel. Sections inside a panel
+ * are separated with hairline dividers, never with nested bordered cards.
+ */
+export function Panel({ className = '', children, ...props }: ComponentProps<'section'>) {
   return (
-    <section className={`rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200 ${className}`}>
-      {(title || actions) && (
-        <header className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-          {actions}
-        </header>
-      )}
+    <section className={`rounded-xl border border-slate-200 bg-white ${className}`} {...props}>
       {children}
     </section>
   )
+}
+
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div aria-hidden="true" className={`animate-pulse rounded bg-slate-200 ${className}`} />
 }
 
 export function LoadingBlock({ label }: { label: string }) {

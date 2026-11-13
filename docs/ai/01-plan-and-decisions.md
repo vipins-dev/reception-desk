@@ -8,12 +8,12 @@ secrets, personal data or employer material were provided.
 
 | Requirement | Design |
 |---|---|
-| find or create owner | always-visible search pane; "no match → Create owner “X”" prefilled |
+| find or create owner | lookup pane (name / phone / city / pet filter, species chips); "no match → Create “X”" opens the New Owner drawer, prefilled |
 | owner details + pets | owner pane, one request (`GET /owners/{id}` returns pets + visits) |
 | open pet, see visits | pet pane next to the owner pane; selection is in the URL |
-| register visit | form always visible on the pet pane, date defaults to today |
-| add pet / edit owner / edit pet | inline forms in the same panes (no modal, no page change) |
-| "no continuous navigation" | one shell, three panes; only the right-hand content changes |
+| register visit | composer always visible on the pet pane, date defaults to today, quick-fill notes |
+| add pet / edit owner / edit pet | inline forms in the same panes; the drawer registers an owner and their first pet together |
+| "no continuous navigation" | one shell, three panes; Today's Visits and All Owners are views whose rows jump back to the Front Desk |
 
 ## Decisions and the alternatives rejected
 
@@ -24,7 +24,9 @@ secrets, personal data or employer material were provided.
    deferred (listed as an improvement).
 4. **Zustand for server data too** (brief requirement) with a deliberately small hand-written cache;
    TanStack Query considered and rejected for this scope (documented in README).
-5. **Latest-request-wins search** (abort + ignore stale) instead of debounce alone.
+5. **Latest-request-wins loading** (abort + ignore stale). Originally for server-side search; since decision 9 it
+   applies to the owner-directory load, and a slow list response also cannot overwrite an owner re-read after it
+   was requested (`requestedAt` on each cached record).
 6. **`/v2/owners`** instead of v1 list (v1 answers 404 on no match).
 7. **Tests**: integration tests drive the real UI + stores + HTTP client against an in-memory fake of the
    backend (MSW); a separate contract suite checks assumptions on the real backend.
@@ -34,8 +36,23 @@ secrets, personal data or employer material were provided.
    instead (static site + the backend's public image as a web service, a rewrite rule keeps the browser
    same-origin). Cost: the backend sleeps and loses its data, which the README says plainly. The Dockerfile
    (nginx + `/petclinic/*` proxy) and compose file were never used for that deployment and remain untested.
+9. **UI redesign from a provided design** (screenshot, reference prototype and written guidelines). It kept the
+   stores and API layer and changed the screens. What the API could not do as specified was adapted, not faked:
+   - *Search by name, phone, city or pet*: the API only searches last names, so the app loads every owner once and
+     filters in the browser (`domain/search.ts`). Rejected: keep server-side search and add the other fields
+     client-side (cannot find what the server filtered out); a server-side `q` (not available, backend is fixed).
+   - *Today's Visits / All Owners*: derived from the owner cache (each owner carries pets and visits), because there
+     is no "visits by date" endpoint. All lists are derived from the one cache, so a write shows up everywhere.
+   - *New Owner drawer*: a `?new=owner` URL flag so it opens over any screen; "also register their pet" runs two
+     requests (owner, then pet). If the pet fails after the owner was created, the owner is kept and opened.
+   - *Add pet*: inline in the owner pane (component state) instead of a route.
+   - Design rules followed: flat panels, no pills, no left accent stripes, one teal accent, tabular numbers in a
+     monospaced face, 40 px controls, skeletons, empty states with an action, focus rings, `prefers-reduced-motion`.
+10. **Short digit strings do not narrow the search.** One or two digits are not a phone number yet; treating them as
+    text made "No owner found" flash on the first keystroke of a phone number.
 
 ## Follow-up requests during the work
 
 - "Do we need TanStack Query / memoisation / Suspense / lazy?" → applied only what is measurable (route
   `lazy` + `Suspense`, `memo` on search rows); the rest is recorded as deliberately not used in the README.
+- "I like this UI, can we do this" (pasted design guidelines, a screenshot and a reference prototype URL) → decision 9.

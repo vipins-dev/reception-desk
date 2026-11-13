@@ -1,7 +1,7 @@
 import { asPetTypeId } from '@/api/types'
 import { todayIso, yearsAgoIso } from './dates'
 import {
-  normalizeLastNameQuery,
+  newOwnerFormSchema,
   normalizePhone,
   ownerFormSchema,
   petFormSchema,
@@ -90,7 +90,7 @@ describe('petFormSchema', () => {
   })
 
   it('requires a type and a real calendar date', () => {
-    expect(messagesFor(petFormSchema.safeParse({ ...base, typeId: '' }), 'typeId')).toEqual(['Choose a pet type'])
+    expect(messagesFor(petFormSchema.safeParse({ ...base, typeId: '' }), 'typeId')).toEqual(['Choose a species'])
     expect(messagesFor(petFormSchema.safeParse({ ...base, birthDate: '2020-02-31' }), 'birthDate')).toEqual([
       'Enter a valid date',
     ])
@@ -123,9 +123,33 @@ describe('visitFormSchema', () => {
   })
 })
 
-describe('normalizeLastNameQuery', () => {
-  it('capitalises the first letter and trims, because the backend LIKE is case-sensitive', () => {
-    expect(normalizeLastNameQuery('  davis ')).toBe('Davis')
-    expect(normalizeLastNameQuery('')).toBe('')
+describe('newOwnerFormSchema', () => {
+  const base = { ...validOwner, withPet: false, petName: '', petBirthDate: '', petTypeId: '' }
+
+  it('ignores the pet fields while "also register their pet" is off', () => {
+    expect(newOwnerFormSchema.safeParse(base).success).toBe(true)
+  })
+
+  it('requires the pet fields when it is on, and names each missing one', () => {
+    const r = newOwnerFormSchema.safeParse({ ...base, withPet: true })
+    expect(messagesFor(r, 'petName')).toEqual(['Pet name is required'])
+    expect(messagesFor(r, 'petBirthDate')).toContain('Birth date is required')
+    expect(messagesFor(r, 'petTypeId')).toEqual(['Choose a species'])
+  })
+
+  it('applies the same pet rules as the stand-alone pet form', () => {
+    const r = newOwnerFormSchema.safeParse({ ...base, withPet: true, petName: 'Milo', petTypeId: '1', petBirthDate: '2999-01-01' })
+    expect(messagesFor(r, 'petBirthDate')).toEqual(['Birth date cannot be in the future'])
+  })
+
+  it('still validates the owner part', () => {
+    const r = newOwnerFormSchema.safeParse({ ...base, telephone: '12345' })
+    expect(messagesFor(r, 'telephone')).toHaveLength(1)
+  })
+
+  it('accepts a complete owner with a first pet', () => {
+    expect(
+      newOwnerFormSchema.safeParse({ ...base, withPet: true, petName: 'Milo', petTypeId: '1', petBirthDate: '2022-03-04' }).success,
+    ).toBe(true)
   })
 })

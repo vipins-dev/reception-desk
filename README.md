@@ -9,18 +9,23 @@ few seconds and press **Retry**. Its data resets whenever it sleeps.
 
 ## Features
 
-One screen with three panes (search, owner, pet), so the receptionist never leaves it during a conversation.
+The **Front Desk** is one screen with three panes (lookup, owner, pet), so the receptionist never leaves it
+during a conversation. Two more views and a drawer cover the rest.
 
-- Find an owner by last name, or create a new one (the typed name is prefilled)
-- See the owner's details and pets
-- Open a pet to see its details and visit history
-- Register a visit, add a pet, edit an owner or a pet, all inline on the same screen
+- Find an owner by name, phone, city or pet name, with a Dogs / Cats / Other filter (press `/` to jump to the search)
+- No match? One click creates the owner, prefilled from what was typed
+- See the owner's details and pets; open a pet to see its details and visit history
+- Register a visit with one click (quick-fill notes such as "Vaccination booster")
+- Add a pet, edit an owner or a pet, all inline, with no pop-ups
+- **New Owner drawer:** register a walk-in and, optionally, their first pet in one pass
+- **Today's Visits:** the day's visits (or all history), each row jumps to that owner and pet
+- **All Owners:** the whole directory as a table, each row jumps to that owner
 - The URL always shows what is open (`/owners/6/pets/8`), so refresh, links and the back button work
 
 ## Tech stack
 
 TypeScript (strict), React 19, Vite, Zustand, React Router, React Hook Form, Zod, Tailwind CSS, Vitest,
-Testing Library, MSW.
+Testing Library, MSW. Fonts (Plus Jakarta Sans, DM Sans, JetBrains Mono) are bundled, so nothing loads from a CDN.
 
 ## Getting started
 
@@ -49,7 +54,7 @@ The backend keeps its data in memory, so everything resets when you restart it.
 
 | Command | What it does |
 |---|---|
-| `npm test` | 89 unit and integration tests. No backend needed; the network is faked with MSW. |
+| `npm test` | 144 unit and integration tests. No backend needed; the network is faked with MSW. |
 | `npm run test:contract` | 14 tests that call a **real** running backend (`PETCLINIC_URL`, default `http://localhost:9966`). |
 | `npm run typecheck` / `npm run lint` / `npm run build` | The other checks that CI runs. |
 
@@ -58,8 +63,8 @@ The backend keeps its data in memory, so everything resets when you restart it.
 ```
 src/api/        HTTP client, zod schemas, error mapping (the only code that knows URLs)
 src/domain/     pure logic: validation rules, dates, formatting
-src/stores/     Zustand stores: search, owners, pet types, toasts
-src/features/   screens and forms: search/, owner/, pet/
+src/stores/     Zustand stores: owners (the cache), directory (load status), search (query + filter), pet types, toasts
+src/features/   screens and forms: lookup/, owner/, pet/, directory/ (All Owners, Today's Visits)
 src/app/        router and layout
 src/test/       in-memory fake of the backend for tests
 contract/       tests against the real backend
@@ -73,9 +78,11 @@ Dependencies point one way: `features` → `stores` → `api`. `domain` is pure.
 **Where state lives**
 
 - **Which owner or pet is open:** in the URL, not in a store. Nothing can get out of sync with it.
-- **Search text and results:** `searchStore`. Only the latest request counts; older ones are cancelled.
 - **Owner, pets and visits:** `ownerStore`, keyed by owner id. `GET /owners/{id}` already returns all of it, so
   there is one copy of each fact and nothing to keep in sync.
+- **The owner list, search results, All Owners and Today's Visits:** *derived* from `ownerStore`, never stored
+  twice. `directoryStore` only remembers whether the list has loaded; `searchStore` holds the typed text and the
+  species filter. A write updates the owner once and every list shows it.
 - **Pet types:** `petTypeStore`, loaded once.
 - **Form input and "editing" toggles:** component state (React Hook Form).
 
@@ -89,9 +96,19 @@ Dependencies point one way: `features` → `stores` → `api`. `domain` is pure.
   and every failure becomes one `ApiError`.
 - **Validation runs in the browser and on the server.** The browser mirrors the server's rules for instant feedback;
   the server stays the authority and its field errors appear on the matching input.
-- **Search uses `GET /v2/owners`**, because the older list endpoint returns 404 when nothing matches.
-- **Light performance work:** lazy-loaded panes with Suspense, and `memo` only on search results, which re-render on
-  every keystroke. No blanket `useMemo`/`useCallback`: the lists are short.
+- **Search runs in the browser.** The API can only search by last name, but the desk needs name, phone, city and pet
+  name. So the app loads every owner once (`GET /v2/owners`, pages of 100, which also avoids the 404 the older list
+  endpoint returns when nothing matches) and filters locally. That is fine for hundreds of owners; thousands would
+  need the server-side search I propose below. The list reloads when the tab becomes visible again.
+- **Today's Visits is derived.** The API cannot list visits by date, but every owner already carries their pets and
+  visits, so the day's visits are read out of the cache.
+- **The New Owner drawer is a `?new=owner` flag** on whatever page is open, so it slides over the current screen
+  without changing what is selected behind it.
+- **Light performance work:** lazy-loaded panes with Suspense, `memo` on the lookup rows, and one `useMemo` for the
+  filtered list, which re-sorts and re-scans every owner on each keystroke. No blanket `useMemo`/`useCallback`
+  elsewhere.
+- **UI rules from the provided design:** one flat level of elevation (no cards inside cards), metadata as plain text
+  with `·` separators instead of pills, one teal accent, monospaced tabular numbers for dates, phones and counts.
 - **What is tested:** integration tests drive the real UI, stores and HTTP client against a fake backend; the
   contract tests check my assumptions about the real backend; no browser end-to-end tests.
 
@@ -103,7 +120,7 @@ sends every other path to `index.html`. These settings live in the Render dashbo
 
 - Backend security is off (the default), so there is no login.
 - One receptionist works with a customer at a time; if two people edit, the last save wins.
-- Search is by last-name prefix, which is all the API supports. An empty search lists the first page of owners.
+- The clinic has hundreds of owners, not millions: the whole list is loaded into the browser (capped at 2,000).
 - Phone numbers can be typed in any common format but are stored as exactly 10 digits, which the server requires.
   International numbers cannot be entered.
 - A visit is a date and a description. The date defaults to today.
@@ -116,31 +133,35 @@ Problems I found in the API, my workaround for each, and the change I would prop
 | Problem | My workaround | Change I would propose |
 |---|---|---|
 | `GET /owners?lastName=x` returns **404 with an empty body** when nothing matches | Use `GET /v2/owners`, which returns 200 with an empty page | Return `200 []`; keep 404 for missing resources |
-| Search is **last name only, prefix, case-sensitive**: no first name, phone or pet name | Capitalise the first letter of what is typed | One `q` parameter: case-insensitive match on name, phone and pet name |
+| Search is **last name only, prefix, case-sensitive**: no first name, phone, city or pet name | Load every owner once and search in the browser, ignoring case and accents | One `q` parameter: case-insensitive match on name, phone, city and pet name, with paging |
 | `PUT` owner and pet return **204 with no body** | Re-read the owner after every write | Return the updated resource and an `ETag` |
 | A visit can be posted for **a pet that belongs to a different owner**; a missing pet gives a vague 404 | The UI only offers the open owner's pets | Validate the owner/pet relation; return a clear "pet not found" |
 | Pet birth-date rules (not in the future, at most 50 years ago) are **not in the OpenAPI file** | Repeat the rules in the frontend | Put them in the schema |
 | **Phone must be exactly 10 digits** but OpenAPI says 1 to 20; a short number gives a **500 error** | The frontend requires exactly 10 digits, so the 500 cannot be triggered | Make schema and entity agree; return 400 with field messages |
 | Validation errors use **undocumented keys** (`field`, `defaultMessage`) | Read those keys, falling back to the `[Path '/x']` text | Document the error shape and add error codes |
-| `/v2/owners` is paged but every row carries **all pets and visits** (N+1 queries) | None needed for this data size | A summary response, or `?expand=pets` |
+| `/v2/owners` is paged but every row carries **all pets and visits** (N+1 queries) | The app relies on it (loading all owners is how the lists work), which is the part that will not scale | A summary response, or `?expand=pets` |
+| **No way to list visits by date**: only per pet, or all visits unfiltered | Today's Visits is derived from the owners already loaded | `GET /visits?date=…` with the pet and owner included |
 | **No concurrency control**: reads have ETags, writes ignore `If-Match` | Last write wins | Version field or `If-Match` returning 412 |
 | A visit has only a date and a description | Free text only | Add vet, time and status |
 
 ## Known limitations
 
 - No warning when you leave a half-filled form: opening another owner discards it.
-- Search cannot find by phone, first name or pet name (API limitation above).
+- The whole owner list is loaded into the browser, so it will not scale to thousands of owners (capped at 2,000,
+  and the screen says so). Another receptionist's new owner appears when this tab is focused again, not instantly.
+- Today's Visits only knows the owners that were loaded; "all history" can be long and is not paged.
 - Visits cannot be edited or deleted in the UI, and neither can owners or pets.
 - Writes are not optimistic, so a slow server is visible. Requests time out after 15 seconds with a Retry button.
 - English only, dates shown as `en-GB`; no automated accessibility audit.
-- Integration tests use a fake backend. The contract tests (last passed 2 Nov 2026) run by hand, not in CI. No browser
+- Integration tests use a fake backend. The contract tests (last passed 13 Nov 2026) run by hand, not in CI. No browser
   end-to-end tests.
 - Backend data is in memory, so ids break after a restart. On the live demo the free backend also sleeps, and waking
   it takes longer than the 15-second timeout, so the first visit after idle needs a Retry.
 
 ## What I would improve next
 
-1. Run the contract tests in CI against the backend's Docker image, and add a few Playwright end-to-end tests.
+1. Run the contract tests in CI against the backend's Docker image, and add a few Playwright end-to-end tests
+   (the drawer animation, keyboard shortcuts and responsive layout are only checked by hand today).
 2. Warn about unsaved changes; make registering a visit optimistic.
 3. Backend side: the `q` search, summary response and `If-Match` proposals above remove most workarounds.
 4. Edit and delete visits, show vets and appointments, add accessibility checks, add translations.
