@@ -22,8 +22,9 @@ secrets, personal data or employer material were provided.
    pets/visits cache would create three copies of one fact to keep in sync.
 3. **Pessimistic writes + re-read**: two PUTs return 204 with no body. Optimistic updates
    deferred (listed as an improvement).
-4. **Zustand for server data too** (brief requirement) with a deliberately small hand-written cache;
-   TanStack Query considered and rejected for this scope (documented in README).
+4. **Zustand for server data too**, with a deliberately small hand-written cache. Zustand was the owner's choice of
+   state library (the instruction to the AI above); the assignment leaves the stack open. TanStack Query was
+   considered and rejected for this scope: four endpoints and one aggregate (documented in README).
 5. **Latest-request-wins loading** (abort + ignore stale). Originally for server-side search; since decision 9 it
    applies to the owner-directory load, and a slow list response also cannot overwrite an owner re-read after it
    was requested (`requestedAt` on each cached record).
