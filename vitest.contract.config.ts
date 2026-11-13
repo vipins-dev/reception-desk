@@ -3,8 +3,8 @@ import { defineConfig } from 'vitest/config'
 
 // Contract tests talk to a REAL Spring PetClinic REST instance:
 //   PETCLINIC_URL=http://localhost:9966 npm run test:contract
-// They create their own data (unique names) and never depend on seed rows
-// staying untouched, so they can run against a backend with leftover data.
+// They create their own data (unique names), never depend on seed rows staying
+// untouched, and delete what they created, so a run leaves the backend as it found it.
 const backend = process.env.PETCLINIC_URL ?? 'http://localhost:9966'
 
 export default defineConfig({

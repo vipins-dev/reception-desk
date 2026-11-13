@@ -18,6 +18,7 @@ Evidence (file → what it shows):
 - `Owner.telephone` entity constraint `^[0-9]{10}$` vs OpenAPI `^[0-9]*$` — Q10 **(missed when reading the OpenAPI + controllers; found by running the app against the real server)**
 - `handleMethodArgumentNotValid` adds `field`, `defaultMessage`, `rejectedValue` to validation messages (undocumented)
 - OpenAPI `telephone` pattern `^[0-9]*$` with `minLength: 1`; names `^\p{L}+([ '-]\p{L}+){0,2}$`
+- `Pet.type` is `@ManyToOne(cascade = ALL)` and `pets.type_id` is `ON DELETE CASCADE` → deleting an owner deletes the pet types of their pets and then every pet of those types — Q11 **(not found by reading: the agent deleted test owners to "clean up", the real backend lost every cat and dog, and only then was the source read; confirmed afterwards with a throwaway pet type)**
 - `petclinic.security.enable=false`, H2 in-memory, `spring.sql.init.mode=always` → data resets on restart
 
 How it changed the design: v2 search; capitalised prefix; re-read after writes; lenient create responses;

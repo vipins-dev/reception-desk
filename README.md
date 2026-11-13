@@ -55,7 +55,7 @@ The backend keeps its data in memory, so everything resets when you restart it.
 | Command | What it does |
 |---|---|
 | `npm test` | 144 unit and integration tests. No backend needed; the network is faked with MSW. |
-| `npm run test:contract` | 14 tests that call a **real** running backend (`PETCLINIC_URL`, default `http://localhost:9966`). |
+| `npm run test:contract` | 15 tests that call a **real** running backend (`PETCLINIC_URL`, default `http://localhost:9966`). They delete the data they create. |
 | `npm run typecheck` / `npm run lint` / `npm run build` | The other checks that CI runs. |
 
 ## Project structure
@@ -142,7 +142,10 @@ Problems I found in the API, my workaround for each, and the change I would prop
 | `/v2/owners` is paged but every row carries **all pets and visits** (N+1 queries) | The app relies on it (loading all owners is how the lists work), which is the part that will not scale | A summary response, or `?expand=pets` |
 | **No way to list visits by date**: only per pet, or all visits unfiltered | Today's Visits is derived from the owners already loaded | `GET /visits?date=…` with the pet and owner included |
 | **No concurrency control**: reads have ETags, writes ignore `If-Match` | Last write wins | Version field or `If-Match` returning 412 |
+| **Deleting an owner also deletes the pet type of each of their pets, and the database then deletes every pet of that type** (`cascade = ALL` on `Pet.type`, `ON DELETE CASCADE` on `pets.type_id`): one delete can erase every cat in the clinic | The app never deletes anything. The contract tests only delete data they created, using a pet type of their own | Remove the cascade from `Pet.type`: a pet's type is shared reference data and must never be deleted with the pet |
 | A visit has only a date and a description | Free text only | Add vet, time and status |
+
+The cascade delete was found while cleaning up test data, and it wiped the cats and dogs from my local backend (a restart brings them back). It is in the backend built from source; one delete on the published Docker image behind the live demo did not remove the type, so that image may be older.
 
 ## Known limitations
 

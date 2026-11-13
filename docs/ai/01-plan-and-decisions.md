@@ -34,8 +34,9 @@ secrets, personal data or employer material were provided.
    asks for run instructions, not a public URL. Railway (two services) was planned first, but its trial had ended;
    Vercel was considered and dropped because it cannot run the Java backend. The demo is on Render's free tier
    instead (static site + the backend's public image as a web service, a rewrite rule keeps the browser
-   same-origin). Cost: the backend sleeps and loses its data, which the README says plainly. The Dockerfile
-   (nginx + `/petclinic/*` proxy) and compose file were never used for that deployment and remain untested.
+   same-origin). Cost: the backend sleeps and loses its data, which the README says plainly. A Dockerfile,
+   nginx config and compose file written earlier for the two-service Railway plan were never run (no Docker on
+   the development machine) and the Render deployment does not use them, so they were deleted.
 9. **UI redesign from a provided design** (screenshot, reference prototype and written guidelines). It kept the
    stores and API layer and changed the screens. What the API could not do as specified was adapted, not faked:
    - *Search by name, phone, city or pet*: the API only searches last names, so the app loads every owner once and

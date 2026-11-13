@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 import { ProblemDetailSchema, type ProblemDetail } from './types'
 
-/** Relative by default so the dev server / nginx proxy keeps us same-origin. */
+/** Relative by default so the dev server / the host's rewrite rule keeps us same-origin. */
 export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/petclinic/api'
 
 const REQUEST_TIMEOUT_MS = 15_000
@@ -96,7 +96,7 @@ async function readProblem(response: Response): Promise<ProblemDetail | undefine
 
 function httpMessage(status: number, problem: ProblemDetail | undefined): string {
   if (status === 404) return problem?.detail ?? 'Not found'
-  // 502/503/504 come from a proxy (Vite in dev, nginx in prod) when the backend is down or restarting.
+  // 502/503/504 come from a proxy (Vite in dev, the host's rewrite rule in production) when the backend is down or restarting.
   if (status === 502 || status === 503 || status === 504) {
     return 'Cannot reach the PetClinic backend. Check that it is running, then retry.'
   }

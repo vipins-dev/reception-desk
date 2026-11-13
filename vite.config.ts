@@ -5,7 +5,7 @@ import { defineConfig } from 'vitest/config'
 
 // In dev the browser talks to Vite, and Vite forwards /petclinic/* to the real
 // backend. That keeps the app same-origin (no CORS) and mirrors production,
-// where nginx does the same job (see Dockerfile / nginx.conf.template).
+// where the host's rewrite rule does the same job (see README, Deployment).
 const backend = process.env.PETCLINIC_URL ?? 'http://localhost:9966'
 
 export default defineConfig({

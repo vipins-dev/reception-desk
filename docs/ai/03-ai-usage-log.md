@@ -21,6 +21,7 @@ verification steps at the bottom.
 | Contract config lacked `globals: true`, so the suite could not even start | first real run | fixed |
 | Search rows list pet names (added late), but only owner edits refreshed them: after "Add pet" / renaming a pet the left list was stale | the browser click-through against the real backend (screenshot showed no pet on the row) | pet writes now refresh the search; two tests fail without the fix and pass with it |
 | Proxy 502 (backend down) was shown as a generic "server had a problem" | user's screenshot | 502/503/504 now say the backend is unreachable |
+| **Cleaning up the contract tests' data by deleting the owners they created wiped the `cat` and `dog` pet types and every cat and dog from the user's local backend** (the backend deletes an owner's pets' types, and the database then deletes all pets of that type). The agent had not checked what a delete cascades to before running it against a real system | the next contract run failed ("lists pet types"), then `GET /owners/1` showed no pets | read `Pet.java` and `schema.sql`; confirmed with a throwaway type; the tests now give every pet a pet type made for the run and delete only that; new test Q11 and an API-problems row; the user restarts the backend to restore the seed data. Lesson: look at what a destructive call touches before running it on anything real |
 | UI redesign: a helper named `useTemplate` (a click handler) tripped the rules-of-hooks lint | `npm run lint` | renamed `applyTemplate` |
 | UI redesign: a test kept a reference to the lookup `<ul>`, which unmounts while nobody matches, so it asserted on a detached copy | one failing test ("found 4 links, expected 1") | tests re-query the list every time |
 | UI redesign: typing a phone number showed "No owner matches “5”" for the first keystrokes | thinking through the failing test above, then a regression test | one or two digits no longer narrow the search |
@@ -43,8 +44,8 @@ verification steps at the bottom.
   contract tests against the real local backend all pass. Looked at in a real browser at 1440, 820 and 390 px wide
   against the real backend (Front Desk, New Owner drawer, All Owners, Today's Visits). **Not yet re-checked on the
   live Render demo.** Drawer animation, `/` shortcut and responsive layout have no automated test.
-- **Not verified:** `docker compose up`, the `Dockerfile` and the nginx config (there was no Docker on the
-  development machine); they are not used by the Render deployment.
+- Removed before submitting: the Dockerfile, nginx config and `docker-compose.yml` (written for the dropped
+  Railway plan, never run, not used by the Render deployment).
 - Live demo, second pass (13 Nov 2026): create owner (formatted phone stored as 10 digits), add pet (landed on
   the new pet), edit owner, edit pet (type preselected) all worked in a real browser, and the stored values were
   confirmed with `curl`. The test owner was deleted afterwards.
