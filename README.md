@@ -111,8 +111,7 @@ sends every other path to `index.html`. These settings live in the Render dashbo
 
 ## API problems found
 
-I read the backend code and OpenAPI file, then checked problems against a running backend (2 Nov 2026). The first
-six rows are pinned by tests in `contract/`; the last four come from reading the code.
+Problems I found in the API, my workaround for each, and the change I would propose in a real project.
 
 | Problem | My workaround | Change I would propose |
 |---|---|---|
