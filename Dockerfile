@@ -11,8 +11,8 @@ FROM nginx:1.27-alpine
 # The nginx image renders /etc/nginx/templates/*.template with envsubst on start.
 COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
-# Railway injects PORT; BACKEND_URL points at the Spring PetClinic REST service
-# (scheme + host + port, no path), e.g. http://petclinic.railway.internal:9966
+# PORT is the listen port (a PaaS may inject its own); BACKEND_URL points at the Spring
+# PetClinic REST service (scheme + host + port, no path), e.g. http://petclinic:9966
 ENV PORT=8080 \
     BACKEND_URL=http://host.docker.internal:9966
 EXPOSE 8080

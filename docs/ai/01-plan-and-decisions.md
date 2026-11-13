@@ -28,10 +28,12 @@ secrets, personal data or employer material were provided.
 6. **`/v2/owners`** instead of v1 list (v1 answers 404 on no match).
 7. **Tests**: integration tests drive the real UI + stores + HTTP client against an in-memory fake of the
    backend (MSW); a separate contract suite checks assumptions on the real backend.
-8. **Deploy**: Railway runs both as two services: the backend from the public Docker image, and the frontend
-   from a Dockerfile (nginx serving the Vite build and proxying `/petclinic/*` to the backend over the private
-   network: same origin, no CORS). Vercel was considered and dropped: it cannot run the Java backend, so it
-   would have meant two platforms.
+8. **Hosting is optional; local run is the primary path.** The assignment says to run the backend locally and
+   asks for run instructions, not a public URL. Railway (two services) was planned first, but its trial had ended;
+   Vercel was considered and dropped because it cannot run the Java backend. The demo is on Render's free tier
+   instead (static site + the backend's public image as a web service, a rewrite rule keeps the browser
+   same-origin). Cost: the backend sleeps and loses its data, which the README says plainly. The Dockerfile
+   (nginx + `/petclinic/*` proxy) and compose file were never used for that deployment and remain untested.
 
 ## Follow-up requests during the work
 

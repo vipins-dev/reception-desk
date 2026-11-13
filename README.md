@@ -1,12 +1,15 @@
 # Reception Desk
 
-A single-screen frontend for a veterinary clinic's receptionist, built on the existing
-[Spring PetClinic REST](https://github.com/spring-petclinic/spring-petclinic-rest) backend
-(unchanged). TypeScript · React 19 · Zustand · Vite · Tailwind · React Hook Form + Zod · Vitest + MSW.
+A frontend for a veterinary clinic's receptionist, built on the unmodified
+[Spring PetClinic REST](https://github.com/spring-petclinic/spring-petclinic-rest) backend.
+TypeScript (strict) · React 19 · Zustand · React Router · React Hook Form + Zod · Tailwind · Vite · Vitest + MSW.
+
+**Live demo:** https://reception-desk-w9jv.onrender.com (free hosting; if the page says "The server took too long
+to respond", the backend was asleep: wait a few seconds and press **Retry**. Its data resets whenever it sleeps.)
 
 ## The workflow
 
-One persistent screen, three panes, no page-to-page navigation:
+One screen with three panes, so the receptionist never leaves it during a conversation:
 
 ```
 ┌ Search ───────┬ Owner ─────────────┬ Pet ─────────────────┐
@@ -16,160 +19,135 @@ One persistent screen, three panes, no page-to-page navigation:
 └───────────────┴────────────────────┴──────────────────────┘
 ```
 
-- **Find or create**: type a last name (debounced); Enter opens the first match; no match offers
-  "Create owner “Smith”" with the name prefilled. Search rows show pet names ("it's about Max").
-- **Owner → pet → visit** are one click each; the *Register visit* form is always visible on a pet
-  (date defaults to today, stays set for batches, focus returns to the notes field).
-- Add pet, edit owner, edit pet are inline forms in the same panes. After "Add pet" you land on the new pet.
-- The URL is the selection (`/owners/6/pets/8`), so refresh and deep links work and the browser back
-  button behaves.
+- **Find or create:** type a last name (debounced); Enter opens the first match; no match offers
+  "Create owner “Smith”" with the name prefilled. Search rows show pet names.
+- **Owner → pet → visit:** one click each. The *Register visit* form is always visible on a pet; the date defaults
+  to today and the focus returns to the notes field for the next visit.
+- **Add pet, edit owner, edit pet** are inline forms in the same panes.
+- **The URL is the selection** (`/owners/6/pets/8`), so refresh, deep links and the back button work.
+- **States implemented:** loading, empty, no results, error with retry, field validation (client and server), success toasts.
 
 ## Run it
 
-### On Railway (frontend + backend)
-
-Railway runs long-lived Docker services, so the Java backend and this frontend live in one project:
-
-| Service | Source | Variables | Public domain |
-|---|---|---|---|
-| `petclinic` (backend) | Docker image `springcommunity/spring-petclinic-rest` | none | none (private network, port 9966) |
-| `web` (frontend) | this GitHub repo, built from the `Dockerfile` (`railway.json`) | `BACKEND_URL=http://${{petclinic.RAILWAY_PRIVATE_DOMAIN}}:9966` | generate one |
-
-1. **Backend:** *New → Deploy from Docker Image* → `springcommunity/spring-petclinic-rest`; name it `petclinic`.
-2. **Frontend:** *New → GitHub Repo* → this repo; add the `BACKEND_URL` variable above; then
-   *Settings → Networking → Generate Domain*. Railway builds the `Dockerfile` (Vite build served by nginx, which
-   proxies `/petclinic/*` to the backend, so the browser stays same-origin and no CORS is involved). The
-   health check is `/healthz`.
-3. Open the generated domain.
-
-If the app says "Cannot reach the PetClinic backend", the frontend cannot see the backend: confirm the service
-is named `petclinic` and is running, or give the backend a public domain and use `BACKEND_URL=https://<domain>`
-(the nginx config handles HTTPS upstreams). If the backend crashes at startup with an out-of-memory error,
-check the plan's memory limit or add `JAVA_TOOL_OPTIONS=-Xmx384m` to it.
-*Not yet deployed or tested on Railway; the Dockerfile and nginx config have not been run either.*
-
-### Locally
-
-Needs Node 22.22+ (or 24; the test tooling requires it — check with `node -v`). The backend needs Java 17+ (or Docker).
+Needs Node 22.22+ (`node -v`) and Java 17+ (or Docker) for the backend.
 
 ```bash
 # 1. backend (separate terminal) — http://localhost:9966/petclinic
 git clone https://github.com/spring-petclinic/spring-petclinic-rest.git
-cd spring-petclinic-rest && ./mvnw spring-boot:run      # or: docker run -p 9966:9966 springcommunity/spring-petclinic-rest
+cd spring-petclinic-rest && ./mvnw spring-boot:run     # or: docker run -p 9966:9966 springcommunity/spring-petclinic-rest
 
 # 2. frontend — http://localhost:5173
 npm install
-npm run dev            # Vite proxies /petclinic/* to localhost:9966 (override: PETCLINIC_URL)
+npm run dev            # Vite proxies /petclinic/* to localhost:9966 (override with PETCLINIC_URL)
 ```
-
-Or everything with Docker (untested): `docker compose up --build` → http://localhost:8080.
 
 | Command | What |
 |---|---|
-| `npm test` | 89 unit + integration tests (no backend needed; network faked with MSW) |
-| `npm run test:contract` | 14 tests: the same API client against a **real** running backend (`PETCLINIC_URL`) |
-| `npm run typecheck` / `npm run lint` / `npm run build` | CI checks |
+| `npm test` | 89 unit and integration tests; no backend needed (the network is faked with MSW) |
+| `npm run test:contract` | 14 tests that run the same API client against a **real** backend (`PETCLINIC_URL`) |
+| `npm run typecheck`, `npm run lint`, `npm run build` | the checks CI runs |
 
-The backend uses in-memory H2 seeded on start, so **data resets whenever it restarts** (locally and on Railway).
+The backend keeps its data in memory (H2, reseeded on start), so everything resets when it restarts.
+
+**Hosted demo:** two Render free-tier services: a static site (build `npm ci && npm run build`, publish `dist`,
+`NODE_VERSION=24.11.1`) and the backend's public Docker image (`SERVER_PORT=10000`,
+`JAVA_TOOL_OPTIONS=-Xmx300m -XX:+UseSerialGC -XX:TieredStopAtLevel=1` to fit 512 MB). The static site has two
+rewrite rules: `/petclinic/*` → the backend URL (so the browser stays same-origin, as with the Vite proxy) and
+`/*` → `/index.html` (deep links). These settings live in the Render dashboard, not in the repo.
 
 ## Architecture
 
 ```
-src/
-  api/       typed HTTP boundary: client (errors, timeout, abort), endpoints, zod schemas
-  domain/    pure logic: validation rules mirroring the OpenAPI constraints, dates, formatting
-  stores/    Zustand: search, owners (server cache), petTypes (reference data), toasts
-  features/  search/ owner/ pet/  — screens and forms
-  app/       router, layout, URL helpers
-  test/      fake in-memory PetClinic (MSW), store reset
-contract/    tests against the real backend
+src/api/       the only code that knows URLs and fetch: typed client, zod schemas, error mapping
+src/domain/    pure logic: validation rules, dates, formatting
+src/stores/    Zustand: search, owners (server cache), pet types, toasts
+src/features/  search/, owner/, pet/: screens and forms
+src/app/       router and layout
+contract/      tests against a real backend
 ```
 
-**State model** (the part to be able to defend):
+Dependencies point one way: `features` → `stores` → `api`; `domain` is pure.
 
 | State | Lives in | Why |
 |---|---|---|
-| Which owner / pet is open | **URL** | deep links, refresh, back button; no duplicated "selected id" to drift |
-| Search query, page, results | `searchStore` | survives owner switching; one in-flight request, **latest wins** (abort + ignore stale) |
-| Owner + pets + visits | `ownersStore` (normalised by owner id) | `GET /owners/{id}` already returns the whole aggregate, so there is *one* copy of each fact and nothing to sync; pets/visits are read out of it |
-| Pet types | `petTypeStore` | loaded once, concurrent callers share the request |
-| Form input / "editing" toggles | component state (React Hook Form) | transient, nobody else needs it |
-| Toasts | `toastStore` | cross-cutting, fire-and-forget |
+| Which owner / pet is open | **the URL** | deep links, refresh, back button; no second "selected id" to drift |
+| Search query, page, results | `searchStore` | survives switching owners; one request in flight, **latest wins** (abort + ignore stale) |
+| Owner with pets and visits | `ownerStore`, keyed by owner id | `GET /owners/{id}` returns the whole aggregate, so there is one copy of each fact and nothing to sync |
+| Pet types | `petTypeStore` | reference data, loaded once; concurrent callers share the request |
+| Form input, "editing" toggles | component state (React Hook Form) | transient; nobody else needs it |
+| Toasts | `toastStore` | cross-cutting, fire and forget |
 
 Main decisions:
 
-- **Zustand also holds server data**, with a hand-written cache (dedupe, abort, stale-while-revalidate,
-  re-read after write). With four endpoints and one aggregate that is a small, tested surface
-  (`stores.test.ts`). TanStack Query would be my choice if the API surface grew (it gives retries, GC,
-  devtools, mutation lifecycle for free); I did not add it here because the brief asked for Zustand and the
-  extra layer would not remove any code that matters.
-- **Writes are pessimistic**: send, then re-read the owner. Both `PUT`s answer 204 with no body and the
-  the server is the only reliable source for what was stored (ids, ordering), so the re-read is the simplest
-  way to show it. A failed re-read keeps the last data and shows a warning; it never fails the write.
-- **Responses are validated at the boundary** (zod); ids are **branded** (`OwnerId` ≠ `PetId`);
-  async state is a **discriminated union** (no "error message while loading"); errors leave the API layer
-  as one `ApiError` type (`network | http | invalid-response`).
-- **Client validation mirrors the API's constraints** (name patterns, digits-only phone, pet age rules) so
-  feedback is instant; the server stays the authority and its field errors are placed on the offending input.
-- **Performance, measured not guessed**: route-level `lazy` + `Suspense` (small win: forms share
-  react-hook-form with the eager owner view, so only ~6 kB moves; main bundle 402 kB / 127 kB gzip is mostly
-  React + router + zod); `memo` only on search rows, which re-render per keystroke while their data does not
-  change; per-field Zustand selectors. Deliberately **not** used: blanket `useMemo/useCallback`
-  (lists are ≤ 10 rows), React Compiler, virtualisation, `useTransition`, and `use()`+Suspense for data
-  (explicit loading/error states are clearer here and easier to test).
+- **Zustand holds server data too**, with a small hand-written cache (dedupe, abort, keep stale data on a failed
+  refresh). With four endpoints and one aggregate this is a small, tested surface. TanStack Query would be my
+  choice if the API grew; the brief asked for Zustand and the extra layer would not remove code that matters here.
+- **Writes are pessimistic: send, then re-read the owner.** Both `PUT`s answer 204 with no body, so the server is
+  the only reliable source for what was stored. A failed re-read keeps the old data and warns; it never fails the write.
+- **The API boundary is strict.** Responses are zod-parsed, ids are branded (`OwnerId` ≠ `PetId`), async state is a
+  discriminated union, and every failure leaves `api/` as one `ApiError` (`network | http | invalid-response`).
+- **Client validation mirrors the server's rules** for instant feedback; the server stays the authority and its field
+  errors are shown on the offending input.
+- **Search uses `GET /v2/owners`** (paged; the v1 list answers 404 when nothing matches).
+- **Performance:** route-level `lazy` + `Suspense` for the rarely used panes (new owner, new pet, pet) and `memo` on
+  search rows only, which re-render on every keystroke while their data does not. I did not add blanket
+  `useMemo`/`useCallback`, virtualisation or the React Compiler: lists are short and I had no measurement asking for them.
+- **Tests:** integration tests drive the real UI, stores and HTTP client against an in-memory fake of the backend
+  (MSW); unit tests cover the pure domain code and the API client; the contract suite checks what I assumed about
+  the real server. Not done: browser E2E.
 
 ## Assumptions
 
-- Backend security is off (the default `petclinic.security.enable=false`); no login is needed.
-- One receptionist per customer: no concurrent-edit handling beyond "last write wins" (the API offers nothing better).
-- Search is by **last name prefix** — that is all the API supports; empty search lists the first page of owners.
-- Phone numbers are typed in any common format and stored as exactly 10 digits — the real server's rule
-  (see Q10), so international numbers cannot be entered.
-- A visit is a date + description (the API has no vet, time or status); the date defaults to today and may be any date.
-- Desktop-first (≥ 1024 px, best ≥ 1280 px); below that the panes stack.
+- Backend security is off (the default); no login.
+- One receptionist per customer; no concurrent-edit handling beyond "last write wins" (the API offers nothing better).
+- Search is by **last-name prefix**, all the API supports; an empty search lists the first page of owners.
+- Phones can be typed in any common format but are stored as exactly 10 digits, which is what the server enforces
+  (Q10), so international numbers cannot be entered.
+- A visit is a date and a description (the API has no vet, time or status). The date defaults to today and may be any date.
+- Desktop first (≥ 1024 px); below that the panes stack.
 
 ## API problems found
 
-Found by reading the backend source/OpenAPI, then **checked against a running backend** (Spring PetClinic REST,
-H2 profile, 2 Nov 2026): `npm run test:contract` passes (14 tests). Each Q-numbered row is pinned by a test in
-`contract/`, so you can see whether it still holds. Rows marked — are not covered by a contract test.
-Running it also corrected the analysis: Q9 was a wrong guess from the source and Q10 was missed by reading alone.
+Found by reading the backend source and OpenAPI, then **checked against a running backend** (Spring PetClinic REST,
+H2 profile, 2 Nov 2026). Each Q-numbered row is pinned by a test in `contract/`. Q9 (create-pet response) was checked
+and is fine, so it is not listed.
 
-| # | Problem | My workaround | Change I'd propose |
+| # | Problem | My workaround | Change I would propose |
 |---|---|---|---|
-| Q1/Q2 | `GET /owners?lastName=x` returns **404 with an empty body** when nothing matches | use `GET /v2/owners` (200 + empty page) | return `200 []`; reserve 404 for missing resources |
-| Q3/Q4 | Search is **last-name only, prefix, case-sensitive** (`LIKE :lastName%`); no first name / phone / pet-name search | capitalise the first letter; "McTavish" typed in lowercase still misses | one `q` parameter: case-insensitive contains over name, phone and pet name, with an index |
-| Q5 | `PUT` owner / pet return **204, no body** | re-read the owner after every write | return the updated resource (and an `ETag`) |
-| Q6 | Visit `POST` **does not check that the pet belongs to `{ownerId}`** in the path | UI only ever uses the open owner's own pets | validate the relation, 404/422 otherwise |
-| Q7 | Visit for a non-existent pet → `DataIntegrityViolation` mapped to a vague **404** | none needed (UI can't produce it) | explicit "pet not found" error; a handler that maps *every* integrity error to 404 hides real bugs |
-| Q8 | Pet birth-date rules (not future, ≤ 50 years) exist only as a code annotation, **not in the OpenAPI schema** | duplicated the rule client-side | express as schema constraints / `maximum` so clients can generate them; compute "today" in a stated timezone (near midnight client and server can disagree) |
-| Q9 | *(checked, not a problem)* the create-pet response looked like it could lack `type.name` (`setName(null)` in the controller); the real server **echoes it fully** | still parse only `id`+`name` and re-read | — |
-| Q10 | **Phone must be exactly 10 digits** (entity `@Pattern ^[0-9]{10}$`) but OpenAPI says digits, 1–20; a short number passes request validation and fails with **500 `ConstraintViolationException`**, not 400 | client rule is exactly 10 digits (after stripping spaces, dashes, brackets), so the 500 can't be triggered from the UI | align the schema with the entity; map constraint violations to 400 with field messages; accept real-world formats (E.164) |
-| — | Validation errors carry undocumented `field` / `defaultMessage` keys inside `schemaValidationErrors`, with English sentences in `message` | map by `field`, else by `[Path '/x']`; show `defaultMessage` | document the fields; add machine-readable codes |
-| — | `/v2/owners` is paginated but each row carries **every pet and every visit** (EAGER fetch ⇒ N+1) | none (small data); rows only use names | summary DTO, `?expand=pets` |
-| — | No concurrency control on writes (reads have ETags, writes ignore `If-Match`) | last write wins | version field / `If-Match` → 412 |
-| — | A visit has only `date` + `description` (`date` optional): no vet, time, status | descriptive free text only | add `vetId`, `time`, `status` for scheduling |
+| Q1/Q2 | `GET /owners?lastName=x` returns **404 with an empty body** when nothing matches | use `GET /v2/owners` (200 + empty page) | return `200 []`; keep 404 for missing resources |
+| Q3/Q4 | Search is **last name only, prefix, case-sensitive**; no first name, phone or pet name | capitalise the first letter ("mctavish" still misses "McTavish") | one `q` parameter: case-insensitive contains over name, phone and pet name |
+| Q5 | `PUT` owner / pet return **204 with no body** | re-read the owner after every write | return the updated resource and an `ETag` |
+| Q6 | Visit `POST` **does not check the pet belongs to `{ownerId}`** in the path | the UI only uses the open owner's own pets | validate the relation; 404/422 otherwise |
+| Q7 | Visit for a non-existent pet gives a vague **404** (every integrity error is mapped to 404) | none needed; the UI cannot produce it | explicit "pet not found"; do not hide real bugs behind one handler |
+| Q8 | Pet birth-date rules (not future, ≤ 50 years) exist only in code, **not in the OpenAPI schema** | duplicated the rule in the client | express them in the schema; fix a timezone for "today" |
+| Q10 | **Phone must be exactly 10 digits** (entity rule) but OpenAPI says 1–20; a short number passes request validation and fails with **500** | client requires exactly 10 digits, so the 500 cannot be triggered | align schema and entity; map constraint violations to 400 with field messages; accept E.164 |
+| — | Validation errors use undocumented `field` / `defaultMessage` keys, plus English sentences in `message` | map by `field`, else by `[Path '/x']` | document the shape; add machine-readable codes |
+| — | `/v2/owners` is paged but every row carries **all pets and visits** (EAGER fetch, N+1) | none (data is small); rows only show names | summary DTO or `?expand=pets` |
+| — | No concurrency control: reads have ETags, writes ignore `If-Match` | last write wins | version field / `If-Match` → 412 |
+| — | A visit has only `date` + `description` (`date` is optional) | free text only | add `vetId`, `time`, `status` |
 
 ## Known limitations
 
-- **No unsaved-changes guard**: clicking another owner while a form is half-filled discards it.
-- Search cannot find by phone, first name or pet name (API limitation above); no keyboard list navigation beyond Enter.
-- Visits can't be edited or deleted in the UI (the API supports it), nor can owners/pets be deleted.
-- Writes are not optimistic, so a slow server is visible; requests time out after 15 s with a retry.
-- English only; dates formatted `en-GB`; accessibility covered by role/label queries in tests, **no automated axe audit**.
-- Integration tests run against a *fake* of the backend; only the contract suite touches the real one. It passed
-  against a live backend once, by hand; it is not wired into CI. No browser E2E (Playwright) yet.
-- Backend data is in-memory, so bookmarked IDs break after a backend restart.
+- **No unsaved-changes guard:** opening another owner while a form is half-filled discards it.
+- Search cannot find by phone, first name or pet name (API limitation above).
+- Visits cannot be edited or deleted in the UI, and owners and pets cannot be deleted (the API supports it).
+- Writes are not optimistic, so a slow server is visible; requests time out after 15 s with a Retry button.
+- English only, dates in `en-GB`; accessibility is covered by role/label queries in tests, with no automated axe audit.
+- Integration tests run against a *fake* of the backend. The contract suite touches the real one but is run by hand
+  (it passed on 2 Nov 2026), not in CI. No browser E2E.
+- Backend data is in memory, so bookmarked ids break after a restart. On the live demo the free backend also sleeps,
+  and waking it (about a minute) takes longer than the 15 s timeout, so the first visit after idle shows an error
+  until Retry is pressed.
 
 ## What I would improve next
 
-1. Run the contract suite in CI against the Docker image (and fail on drift), then add a few Playwright E2E flows.
-2. Unsaved-changes guard and optimistic updates for visit registration.
-3. Backend-side: the `q` search, summary DTO and `If-Match` proposals above — they remove most of the workarounds.
+1. Run the contract suite in CI against the backend's Docker image, then add a few Playwright flows.
+2. An unsaved-changes guard, and optimistic updates for registering a visit.
+3. Backend side: the `q` search, summary DTO and `If-Match` proposals above remove most of the workarounds.
 4. Visit edit/delete, vet and appointment display, axe checks in CI, i18n.
 5. If the API grows: move server state to TanStack Query and keep Zustand for UI state only.
 
 ## AI usage
 
-See [`docs/ai/`](docs/ai): the working plan, the API analysis that drove the design, and a log of what was
-generated, what failed and was corrected, and what still needs human verification.
+See [`docs/ai/`](docs/ai): the plan and decisions, the API analysis that drove the design, and a log of what the AI
+got wrong, how each error was caught, and what was and was not verified.

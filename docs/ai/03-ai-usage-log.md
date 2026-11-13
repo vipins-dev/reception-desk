@@ -31,12 +31,18 @@ verification steps at the bottom.
 - Click-through in the browser against the real backend, every flow: lowercase search, "no match → create
   owner" (with the short-phone rejection first), add pet, edit owner, edit pet, register visit, and a deep link
   straight to a pet URL. Results were cross-checked with `curl` against the real API.
-- **Not verified:** `docker compose up`; the Railway deployment.
+- Live demo on Render (free tier), driven through the owner's signed-in browser: search, owner, pet, register
+  visit and a deep link worked; `GET`/`POST`/`PUT` through the rewrite were checked with `curl`. The first load
+  after idle showed the 15 s timeout error (the free backend was asleep); Retry worked.
+- **Not verified:** `docker compose up`, the `Dockerfile` and the nginx config (there was no Docker on the
+  development machine); they are not used by the Render deployment.
+- Live demo, second pass (13 Nov 2026): create owner (formatted phone stored as 10 digits), add pet (landed on
+  the new pet), edit owner, edit pet (type preselected) all worked in a real browser, and the stored values were
+  confirmed with `curl`. The test owner was deleted afterwards.
 
 ## Checklist for the human before submitting
 
 1. Start the real backend; `npm run dev`; click through every flow once.
 2. Re-run `npm run test:contract` before submitting (it passed on 2 Nov 2026) and re-read the README "API problems" table.
 3. Read `stores/` and `api/client.ts` until you can explain latest-wins search, the owner cache and error mapping.
-4. Deploy both services on Railway (README) and open the URL.
-5. Prepare for "make a small change": e.g. search by first name client-side, or a visit-description max length.
+4. Prepare for "make a small change": e.g. search by first name client-side, or a visit-description max length.
