@@ -1,4 +1,4 @@
-import { request } from './client'
+import { FIRST_LOAD_TIMEOUT_MS, request } from './client'
 import {
   OwnerPageSchema,
   OwnerSchema,
@@ -47,10 +47,15 @@ export const searchOwners = (params: SearchOwnersParams, signal?: AbortSignal): 
  * only search by last name.
  */
 export const listOwners = (page: number, size: number, signal?: AbortSignal): Promise<OwnerPage> =>
-  searchOwners({ lastName: '', page, size }, signal)
+  request('/v2/owners', {
+    query: { lastName: '', page, size },
+    schema: OwnerPageSchema,
+    signal,
+    timeoutMs: FIRST_LOAD_TIMEOUT_MS,
+  })
 
 export const getOwner = (id: OwnerId, signal?: AbortSignal): Promise<Owner> =>
-  request(`/owners/${id}`, { schema: OwnerSchema, signal })
+  request(`/owners/${id}`, { schema: OwnerSchema, signal, timeoutMs: FIRST_LOAD_TIMEOUT_MS })
 
 export const createOwner = (fields: OwnerFields): Promise<Owner> =>
   request('/owners', { method: 'POST', body: fields, schema: OwnerSchema })

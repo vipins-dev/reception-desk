@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router'
 import { paths } from '@/app/routes'
 import { SearchIcon } from '@/components/icons'
 import { Alert, Button, Panel, Skeleton, inputClass } from '@/components/ui'
+import { WakingNote } from '@/components/WakingNote'
 import { formatDate, todayIso } from '@/domain/dates'
 import { formatPhone, titleCase } from '@/domain/format'
 import { allVisits, matchesVisitQuery, visitsOn } from '@/domain/search'
@@ -77,6 +78,8 @@ export function VisitsPage() {
           </div>
         </div>
       </div>
+
+      {loading && <WakingNote />}
 
       {status === 'error' && (
         <Alert action={<Button variant="secondary" size="sm" onClick={() => void load()}>Retry</Button>}>

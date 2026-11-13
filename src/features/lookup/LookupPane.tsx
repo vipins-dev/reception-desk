@@ -4,6 +4,7 @@ import type { Owner } from '@/api/types'
 import { paths, useNewOwnerDrawer } from '@/app/routes'
 import { SearchIcon, UserPlusIcon, XIcon } from '@/components/icons'
 import { Alert, Button, Panel, Skeleton } from '@/components/ui'
+import { WakingNote } from '@/components/WakingNote'
 import { formatPhone, petSummary, plural } from '@/domain/format'
 import { SPECIES_FILTERS } from '@/domain/search'
 import { DIRECTORY_MAX_PAGES, DIRECTORY_PAGE_SIZE, useAllOwners, useDirectoryStore, useFilteredOwners } from '@/stores/directoryStore'
@@ -176,7 +177,14 @@ export function LookupPane({ className = '' }: { className?: string }) {
 
       {/* Stacked (below lg) the list is capped so the owner and pet panes stay within reach. */}
       <div className="max-h-96 min-h-0 flex-1 overflow-y-auto lg:max-h-none">
-        {loading && <RowSkeletons />}
+        {loading && (
+          <>
+            <div className="p-4 pb-0 empty:hidden">
+              <WakingNote />
+            </div>
+            <RowSkeletons />
+          </>
+        )}
 
         {status === 'error' && (
           <div className="p-4">

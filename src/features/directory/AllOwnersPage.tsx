@@ -4,6 +4,7 @@ import type { Owner } from '@/api/types'
 import { paths, useNewOwnerDrawer } from '@/app/routes'
 import { SearchIcon } from '@/components/icons'
 import { Alert, Button, Panel, Skeleton, inputClass } from '@/components/ui'
+import { WakingNote } from '@/components/WakingNote'
 import { formatPhone, petSummary, plural } from '@/domain/format'
 import { filterOwners } from '@/domain/search'
 import { useAllOwners, useDirectoryStore } from '@/stores/directoryStore'
@@ -48,6 +49,8 @@ export function AllOwnersPage() {
           />
         </div>
       </div>
+
+      {loading && <WakingNote />}
 
       {status === 'error' && (
         <Alert action={<Button variant="secondary" size="sm" onClick={() => void load()}>Retry</Button>}>

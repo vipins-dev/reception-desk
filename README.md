@@ -4,8 +4,8 @@ A web app for a vet clinic's receptionist, built on the unmodified
 [Spring PetClinic REST](https://github.com/spring-petclinic/spring-petclinic-rest) backend.
 
 **Live demo:** https://reception-desk-w9jv.onrender.com
-The demo runs on free hosting. If you see "The server took too long to respond", the backend was asleep: wait a
-few seconds and press **Retry**. Its data resets whenever it sleeps.
+The demo runs on free hosting. After a break the backend needs up to a minute to wake: the first load waits for it
+and says so ("Waking up the server…"). Its data resets whenever it sleeps.
 
 ## Features
 
@@ -54,7 +54,7 @@ The backend keeps its data in memory, so everything resets when you restart it.
 
 | Command | What it does |
 |---|---|
-| `npm test` | 144 unit and integration tests. No backend needed; the network is faked with MSW. |
+| `npm test` | 147 unit and integration tests. No backend needed; the network is faked with MSW. |
 | `npm run test:contract` | 15 tests that call a **real** running backend (`PETCLINIC_URL`, default `http://localhost:9966`). They delete the data they create. |
 | `npm run typecheck` / `npm run lint` / `npm run build` | The other checks that CI runs. |
 
@@ -154,12 +154,12 @@ The cascade delete was found while cleaning up test data, and it wiped the cats 
   and the screen says so). Another receptionist's new owner appears when this tab is focused again, not instantly.
 - Today's Visits only knows the owners that were loaded; "all history" can be long and is not paged.
 - Visits cannot be edited or deleted in the UI, and neither can owners or pets.
-- Writes are not optimistic, so a slow server is visible. Requests time out after 15 seconds with a Retry button.
+- Writes are not optimistic, so a slow server is visible. Requests time out after 15 seconds (90 seconds for the first loads, so a sleeping backend can wake) with a Retry button.
 - English only, dates shown as `en-GB`; no automated accessibility audit.
 - Integration tests use a fake backend. The contract tests (last passed 13 Nov 2026) run by hand, not in CI. No browser
   end-to-end tests.
-- Backend data is in memory, so ids break after a restart. On the live demo the free backend also sleeps, and waking
-  it takes longer than the 15-second timeout, so the first visit after idle needs a Retry.
+- Backend data is in memory, so ids break after a restart. On the live demo the free backend also sleeps; the first load
+  after idle waits for it to wake (up to a minute) and shows a "waking up" message.
 
 ## What I would improve next
 

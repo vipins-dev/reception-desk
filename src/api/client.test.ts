@@ -1,9 +1,9 @@
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test/server'
 import { BASE } from '@/test/fakeBackend'
-import { ApiError, fieldErrorsFromProblem, isAbortError } from './client'
-import { addVisit, getOwner, searchOwners } from './petclinic'
-import { asOwnerId, asPetId } from './types'
+import { ApiError, FIRST_LOAD_TIMEOUT_MS, REQUEST_TIMEOUT_MS, fieldErrorsFromProblem, isAbortError, request } from './client'
+import { addVisit, getOwner, listOwners, searchOwners } from './petclinic'
+import { OwnerSchema, asOwnerId, asPetId } from './types'
 
 const caught = async (p: Promise<unknown>): Promise<ApiError> => {
   try {
@@ -85,6 +85,23 @@ describe('request()', () => {
       body: { date: '2026-01-01', description: 'x' },
       type: 'application/json',
     })
+  })
+})
+
+describe('timeouts', () => {
+  it('gives up after the per-request timeout, with a clear message', async () => {
+    server.use(http.get(`${BASE}/owners/1`, () => new Promise(() => {})))
+    const e = await caught(request('/owners/1', { schema: OwnerSchema, timeoutMs: 30 }))
+    expect(e).toMatchObject({ kind: 'network', message: 'The server took too long to respond.' })
+  })
+
+  it('lets first loads wait for a sleeping backend, but not ordinary writes', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    await getOwner(asOwnerId(6))
+    await listOwners(0, 100)
+    await addVisit(asOwnerId(6), asPetId(8), { date: '2026-01-01', description: 'x' })
+    expect(timeout.mock.calls.map((c) => c[0])).toEqual([FIRST_LOAD_TIMEOUT_MS, FIRST_LOAD_TIMEOUT_MS, REQUEST_TIMEOUT_MS])
+    expect(FIRST_LOAD_TIMEOUT_MS).toBeGreaterThan(REQUEST_TIMEOUT_MS)
   })
 })
 

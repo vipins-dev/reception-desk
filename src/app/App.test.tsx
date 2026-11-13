@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { MemoryRouter } from 'react-router'
@@ -639,6 +639,39 @@ describe('failure handling', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/cannot reach the clinic server/i)
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await lookupList()).toBeInTheDocument()
+  })
+
+  it('says the server is waking up when the first load is slow, then shows the owners', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      let release = () => {}
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      server.use(
+        http.get(`${BASE}/v2/owners`, async () => {
+          await gate
+          return HttpResponse.json({
+            content: db.owners.map((o) => ({ ...o, pets: [] })),
+            page: 0,
+            size: 100,
+            totalElements: db.owners.length,
+            totalPages: 1,
+          })
+        }),
+      )
+      setup()
+      expect(screen.queryByText(/Waking up the server/)).not.toBeInTheDocument() // not for a fast load
+      await act(async () => {
+        vi.advanceTimersByTime(4_000)
+      })
+      expect(screen.getByText(/Waking up the server/)).toBeInTheDocument()
+      release()
+      expect(await lookupList()).toBeInTheDocument()
+      expect(screen.queryByText(/Waking up the server/)).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps the last-known owner on screen with a warning when a refresh fails', async () => {

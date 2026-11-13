@@ -3,6 +3,7 @@ import { Outlet, useOutletContext } from 'react-router'
 import type { Owner } from '@/api/types'
 import { useOwnerIdParam } from '@/app/routes'
 import { Alert, Button, LoadingBlock, Panel, Skeleton } from '@/components/ui'
+import { WakingNote } from '@/components/WakingNote'
 import { selectOwnerRecord, useOwnersStore } from '@/stores/ownerStore'
 import { OwnerPanel } from './OwnerPanel'
 
@@ -18,6 +19,7 @@ function OwnerSkeleton() {
       <Skeleton className="h-7 w-1/3" />
       <Skeleton className="h-4 w-1/2" />
       <Skeleton className="h-4 w-1/4" />
+      <WakingNote />
     </Panel>
   )
 }

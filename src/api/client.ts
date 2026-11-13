@@ -4,7 +4,14 @@ import { ProblemDetailSchema, type ProblemDetail } from './types'
 /** Relative by default so the dev server / the host's rewrite rule keeps us same-origin. */
 export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/petclinic/api'
 
-const REQUEST_TIMEOUT_MS = 15_000
+/** Normal requests give up after 15 seconds. */
+export const REQUEST_TIMEOUT_MS = 15_000
+/**
+ * Reads that can be the first request after the backend has been idle (the owner
+ * list, an owner opened from a link) wait longer: a sleeping free-tier backend
+ * needs up to about a minute to wake, and the request is simply held until it does.
+ */
+export const FIRST_LOAD_TIMEOUT_MS = 90_000
 
 export type ApiErrorKind =
   /** Could not reach the server, or the request timed out. */
@@ -55,6 +62,8 @@ interface RequestOptions<S extends z.ZodType | undefined> {
   signal?: AbortSignal | undefined
   /** Schema for the success body. Omit for endpoints that return 204. */
   schema?: S
+  /** How long to wait before giving up. Default: `REQUEST_TIMEOUT_MS`. */
+  timeoutMs?: number
 }
 
 function buildUrl(path: string, query?: Query): string {
@@ -113,8 +122,8 @@ export async function request(
   path: string,
   options: RequestOptions<z.ZodType | undefined> = {},
 ): Promise<unknown> {
-  const { method = 'GET', query, body, signal, schema } = options
-  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  const { method = 'GET', query, body, signal, schema, timeoutMs = REQUEST_TIMEOUT_MS } = options
+  const timeout = AbortSignal.timeout(timeoutMs)
   const combined = signal ? AbortSignal.any([signal, timeout]) : timeout
 
   let response: Response
